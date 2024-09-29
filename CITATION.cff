@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: |
+  If you use this software, please cite it using these metadata.
+title: "A Rust implementation of the Systemd Journal binary disk format"
+
+version: "0.1.0"
+date-released: 2024-10-01
+
+repository-code: https://github.com/passcod/journald-format
+license: Apache-2.0
+
+authors:
+  - family-names: Saparelli
+    given-names: Félix
+    orcid: https://orcid.org/0000-0002-2010-630X
