@@ -1,6 +1,7 @@
-use std::num::NonZeroU64;
+use std::{num::NonZeroU64, path::Path};
 
 use deku::prelude::*;
+use futures_io::{AsyncRead, AsyncSeek, AsyncWrite};
 
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
 #[deku(id_type = "u8")]
@@ -286,4 +287,157 @@ pub struct TagObjectHeader {
 	pub seqnum: NonZeroU64,
 	pub epoch: u64,
 	pub tag: [u8; TAG_LENGTH],
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Compression {
+	/// Compress new objects with XZ.
+	Xz,
+
+	/// Compress new objects with LZ4.
+	Lz4,
+
+	/// Compress new objects with Zstd.
+	#[default]
+	Zstd,
+}
+
+pub trait AsyncFileRead: AsyncRead + AsyncSeek + Unpin {
+	/// Open a file for reading.
+	///
+	/// This should close the current file (if any).
+	fn open(
+		&mut self,
+		filename: &Path,
+	) -> impl std::future::Future<Output = std::io::Result<()>> + Send;
+
+	/// The path to the current file, if one is open.
+	fn current(&self) -> Option<&Path>;
+}
+
+pub trait AsyncFileWrite: AsyncFileRead + AsyncWrite {
+	/// Close the current file (if any) and open a new one for writing.
+	fn rotate(
+		&mut self,
+		filename: &Path,
+	) -> impl std::future::Future<Output = std::io::Result<()>> + Send;
+
+	/// Whether the current file is writable.
+	///
+	/// `None` if no file is open.
+	fn writeable(&self) -> Option<bool>;
+}
+
+pub struct JournalReader<T> {
+	io: T,
+}
+
+impl<T> JournalReader<T>
+where
+	T: AsyncFileRead,
+{
+	pub fn new(io: T) -> Self {
+		Self { io }
+	}
+
+	/// Verify all data in the current journal file.
+	///
+	/// This will check every hash, every sealing tag, and every entry. It
+	/// should be used to detect tampering; when reading the journal normally,
+	/// only the data that is actually read is verified.
+	pub async fn verify(&mut self) -> std::io::Result<bool> {
+		todo!()
+	}
+
+	/// Verify all data in the entire journal.
+	pub async fn verify_all(&mut self) -> std::io::Result<bool> {
+		todo!()
+	}
+
+	/// Read entries from the current position.
+	pub async fn entries(&mut self) -> std::io::Result<Vec<()>> {
+		// TODO: return Stream
+		todo!()
+	}
+
+	/// Seek to a timestamp, or as close as possible.
+	pub async fn seek_to_timestamp(&mut self, _timestamp: u64) -> std::io::Result<()> {
+		todo!()
+	}
+
+	/// Seek to a sequence number, or as close as possible.
+	pub async fn seek_to_seqnum(&mut self, _seqnum: u64) -> std::io::Result<()> {
+		todo!()
+	}
+
+	/// Seek to the start of a boot ID.
+	pub async fn seek_to_boot_id(&mut self, _boot_id: u128) -> std::io::Result<()> {
+		todo!()
+	}
+}
+
+pub struct JournalWriter<T> {
+	seal: bool,
+	compact: bool,
+	compression: Option<Compression>,
+	io: T,
+	prepared: bool,
+}
+
+impl<T> JournalWriter<T>
+where
+	T: AsyncFileWrite,
+{
+	pub fn new(io: T) -> Self {
+		Self::with_options(io, true, true, Some(Compression::default()))
+	}
+
+	// enabling seal also enables seal-continuous bc that's backwards compatible
+	pub fn with_options(
+		io: T,
+		seal: bool,
+		compact: bool,
+		compression: Option<Compression>,
+	) -> Self {
+		Self {
+			seal,
+			compact,
+			compression,
+			io,
+			prepared: false,
+		}
+	}
+
+	/// Prepare the journal for writing.
+	///
+	/// This must be called before writing any entries. It will error if:
+	/// - the journal is already open (e.g. by another process)
+	/// - opening the journal file fails
+	/// - reading the journal header fails
+	/// - writing the journal status fails
+	pub async fn prepare(&mut self) -> std::io::Result<()> {
+		self.prepared = true;
+		todo!()
+	}
+
+	/// Write an entry (a set of key-value items) to the journal.
+	pub async fn write_entry(
+		&mut self,
+		_fields: impl Iterator<Item = (String, bstr::BString)>,
+	) -> std::io::Result<()> {
+		if !self.prepared {
+			self.prepare().await?;
+		}
+		todo!()
+	}
+
+	/// Seal the journal.
+	///
+	/// This should be called at a regular interval to prevent tampering.
+	pub async fn seal(&mut self) -> std::io::Result<()> {
+		if !self.prepared {
+			self.prepare().await?;
+		}
+		todo!()
+	}
 }
