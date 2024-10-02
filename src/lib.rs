@@ -36,6 +36,7 @@ pub enum ObjectType {
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
 #[deku(endian = "little", magic = b"LPKSHHRH")]
 pub struct Header {
+	// magic 8 = 8
 	pub compatible_flags: u32,   // 4 = 12
 	pub incompatible_flags: u32, // 4 = 16
 
@@ -85,13 +86,13 @@ pub struct Header {
 
 	// added in systemd 252
 	#[deku(cond = "*header_size > 256")]
-	pub tail_entry_array_offset: u64, // 8 = 264
-	#[deku(cond = "*header_size > 264")]
-	pub tail_entry_array_n_entries: u64, // 8 = 272
+	pub tail_entry_array_offset: u32, // 4 = 260
+	#[deku(cond = "*header_size > 260")]
+	pub tail_entry_array_n_entries: u32, // 4 = 264
 
 	// added in systemd 254
-	#[deku(cond = "*header_size > 272")]
-	pub tail_entry_offset: u64, // 8 = 280
+	#[deku(cond = "*header_size > 264")]
+	pub tail_entry_offset: u64, // 8 = 272
 }
 
 /// Feature flags that can be ignored if not understood.
