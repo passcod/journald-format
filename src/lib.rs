@@ -388,7 +388,6 @@ where
 pub struct WriteOptions {
 	pub machine_id: u128,
 	pub boot_id: u128,
-	// enabling seal also enables seal-continuous bc that's backwards compatible
 	pub seal: bool,
 	pub compact: bool,
 	pub compression: Option<Compression>,
@@ -403,6 +402,22 @@ impl WriteOptions {
 			compact: true,
 			compression: Some(Compression::default()),
 		}
+	}
+
+	// enabling seal also enables seal-continuous bc that's backwards compatible
+	pub fn with_seal(mut self, seal: bool) -> Self {
+		self.seal = seal;
+		self
+	}
+
+	pub fn with_compact(mut self, compact: bool) -> Self {
+		self.compact = compact;
+		self
+	}
+
+	pub fn with_compression(mut self, compression: Option<Compression>) -> Self {
+		self.compression = compression;
+		self
 	}
 }
 
