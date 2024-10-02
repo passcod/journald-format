@@ -332,6 +332,14 @@ pub struct JournalReader<T> {
 	io: T,
 }
 
+impl<T> std::fmt::Debug for JournalReader<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("JournalReader")
+			.field("io", &std::any::type_name::<T>())
+			.finish()
+	}
+}
+
 impl<T> JournalReader<T>
 where
 	T: AsyncFileRead,
@@ -376,33 +384,51 @@ where
 	}
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WriteOptions {
+	pub machine_id: u128,
+	pub boot_id: u128,
+	// enabling seal also enables seal-continuous bc that's backwards compatible
+	pub seal: bool,
+	pub compact: bool,
+	pub compression: Option<Compression>,
+}
+
+impl WriteOptions {
+	pub fn new(machine_id: u128, boot_id: u128) -> Self {
+		Self {
+			machine_id,
+			boot_id,
+			seal: true,
+			compact: true,
+			compression: Some(Compression::default()),
+		}
+	}
+}
+
 pub struct JournalWriter<T> {
-	seal: bool,
-	compact: bool,
-	compression: Option<Compression>,
+	options: WriteOptions,
 	io: T,
 	prepared: bool,
+}
+
+impl<T> std::fmt::Debug for JournalWriter<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("JournalWriter")
+			.field("options", &self.options)
+			.field("io", &std::any::type_name::<T>())
+			.field("prepared", &self.prepared)
+			.finish()
+	}
 }
 
 impl<T> JournalWriter<T>
 where
 	T: AsyncFileWrite,
 {
-	pub fn new(io: T) -> Self {
-		Self::with_options(io, true, true, Some(Compression::default()))
-	}
-
-	// enabling seal also enables seal-continuous bc that's backwards compatible
-	pub fn with_options(
-		io: T,
-		seal: bool,
-		compact: bool,
-		compression: Option<Compression>,
-	) -> Self {
+	pub fn with_options(io: T, options: WriteOptions) -> Self {
 		Self {
-			seal,
-			compact,
-			compression,
+			options,
 			io,
 			prepared: false,
 		}
