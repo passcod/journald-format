@@ -269,11 +269,14 @@ pub struct EntryObjectRegularItem {
 	pub hash: u64,
 }
 
+// used for both data and field hash tables
+// the hash table is an array of these
+// key is hash % size of the hash table
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct HashItem {
-	pub head_hash_offset: u64,
-	pub tail_hash_offset: u64,
+	pub head_hash_offset: Option<NonZeroU64>,
+	pub tail_hash_offset: Option<NonZeroU64>,
 }
 
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
