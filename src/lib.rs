@@ -1,4 +1,7 @@
-use std::{num::NonZeroU64, path::Path};
+use std::{
+	num::NonZeroU64,
+	path::{Path, PathBuf},
+};
 
 use deku::prelude::*;
 use futures_io::{AsyncRead, AsyncSeek, AsyncWrite};
@@ -93,6 +96,17 @@ pub struct Header {
 	// added in systemd 254
 	#[deku(cond = "*header_size > 264")]
 	pub tail_entry_offset: u64, // 8 = 272
+}
+
+impl Header {
+	pub fn filename(&self, scope: &str) -> PathBuf {
+		PathBuf::from(hex::encode(self.machine_id.to_le_bytes())).join(format!(
+			"{scope}@{file_seqnum}-{head_seqnum}-{head_realtime}.journal",
+			file_seqnum = hex::encode(self.seqnum_id.to_le_bytes()),
+			head_seqnum = hex::encode(self.head_entry_seqnum.to_le_bytes()),
+			head_realtime = hex::encode(self.head_entry_realtime.to_le_bytes()),
+		))
+	}
 }
 
 /// Feature flags that can be ignored if not understood.
@@ -265,7 +279,7 @@ pub struct HashItem {
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryArrayObjectHeader {
-	pub next_entry_array_offset: u64,
+	pub next_entry_array_offset: Option<NonZeroU64>,
 }
 
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
