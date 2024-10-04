@@ -1,4 +1,7 @@
+use std::collections::HashSet;
+
 pub use file_read::{AsyncFileRead, FilenameInfo};
+use futures_util::{Stream, StreamExt as _};
 
 mod file_read;
 
@@ -8,6 +11,15 @@ mod file_read;
 pub struct JournalSelection {
 	pub machine_id: u128,
 	pub scope: String,
+}
+
+impl From<FilenameInfo> for JournalSelection {
+	fn from(info: FilenameInfo) -> Self {
+		Self {
+			machine_id: info.machine_id,
+			scope: info.scope,
+		}
+	}
 }
 
 pub struct JournalReader<T> {
@@ -34,8 +46,17 @@ where
 	}
 
 	/// List all available journals (machine ID, scope).
-	pub async fn list(&self) -> std::io::Result<Vec<JournalSelection>> {
-		todo!()
+	pub async fn list(&self) -> std::io::Result<HashSet<JournalSelection>> {
+		let mut set = HashSet::new();
+		let mut files = self.io.list_files(None);
+		while let Some(file) = files.next().await {
+			let file = file?;
+			if let Some(info) = T::parse_filename(&file) {
+				set.insert(info.into());
+			}
+		}
+
+		Ok(set)
 	}
 
 	/// Get the current journal selection.
@@ -51,9 +72,10 @@ where
 	}
 
 	/// Read entries from the current position.
-	pub async fn entries(&mut self) -> std::io::Result<Vec<()>> {
-		// TODO: return Stream
-		todo!()
+	pub async fn entries(
+		&mut self,
+	) -> std::io::Result<impl Stream<Item = std::io::Result<()>> + Unpin> {
+		Ok(futures_util::stream::empty(/* TODO */))
 	}
 
 	/// Seek to the end of the journal.

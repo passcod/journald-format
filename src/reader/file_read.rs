@@ -40,7 +40,10 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// alpha/system@a-b-c.journal
 	/// alpha/system@d-e-f.journal
 	/// ```
-	fn list_files(&self, prefix: Option<&Path>) -> impl Stream<Item = std::io::Result<PathBuf>>;
+	fn list_files(
+		&self,
+		prefix: Option<&Path>,
+	) -> impl Stream<Item = std::io::Result<PathBuf>> + Unpin;
 
 	/// Make a journal filename.
 	///
