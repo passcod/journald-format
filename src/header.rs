@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use deku::{ctx::Endian, no_std_io, prelude::*};
 use flagset::{flags, FlagSet};
 
-use crate::reader::AsyncFileRead;
+use crate::reader::{AsyncFileRead, FilenameInfo};
 
 // magic 8 = 8
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
@@ -78,6 +78,18 @@ pub struct Header {
 
 const MIN_HEADER_SIZE: usize = 208;
 const MAX_HEADER_SIZE: usize = 272;
+
+impl From<Header> for FilenameInfo {
+	fn from(value: Header) -> Self {
+		FilenameInfo {
+			machine_id: value.machine_id,
+			scope: String::new(),
+			file_seqnum: value.seqnum_id,
+			head_seqnum: value.head_entry_seqnum,
+			head_realtime: value.head_entry_realtime,
+		}
+	}
+}
 
 impl Header {
 	pub fn filename(&self, scope: &str) -> PathBuf {
