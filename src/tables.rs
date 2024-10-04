@@ -11,3 +11,5 @@ pub struct HashItem {
 	pub head_hash_offset: Option<NonZeroU64>,
 	pub tail_hash_offset: Option<NonZeroU64>,
 }
+
+pub const HASH_ITEM_SIZE: usize = 16;

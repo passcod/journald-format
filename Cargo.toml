@@ -7,8 +7,13 @@ description = "Read and write the journald binary disk format"
 
 [dependencies]
 bstr = "1.10.0"
-deku = "0.18.1"
+deku = { version = "0.18.1", default-features = false, features = ["std"] }
+flagset = "0.4.6"
 futures-io = "0.3.30"
+futures-util = { version = "0.3.30", features = ["io"] }
 hex = "0.4.3"
 siphasher = "1.0.1"
 uuid = { version = "1.10.0", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1.40.0", features = ["full"] }

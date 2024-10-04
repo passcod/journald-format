@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use futures_io::{AsyncRead, AsyncSeek};
+use futures_util::io::{AsyncReadExt, AsyncSeekExt, Cursor};
 
-pub trait AsyncFileRead: AsyncRead + AsyncSeek + Unpin {
+pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// Open a file for reading.
 	///
 	/// This should close the current file (if any).
@@ -13,7 +13,74 @@ pub trait AsyncFileRead: AsyncRead + AsyncSeek + Unpin {
 
 	/// The path to the current file, if one is open.
 	fn current(&self) -> Option<&Path>;
+
+	/// For internal use only.
+	#[allow(async_fn_in_trait)]
+	#[doc(hidden)]
+	async fn read_bounded_into(
+		&mut self,
+		buf: &mut [u8],
+		min: usize,
+		max: usize,
+	) -> std::io::Result<usize>
+	where
+		Self: Unpin,
+	{
+		let mut n = 0;
+		while n < min {
+			let m = self.read(&mut buf[n..]).await?;
+			if m == 0 {
+				return Err(std::io::Error::new(
+					std::io::ErrorKind::UnexpectedEof,
+					"reached EOF before min bound",
+				));
+			}
+			n += m;
+		}
+		while n < max {
+			let m = self.read(&mut buf[n..]).await?;
+			if m == 0 {
+				break;
+			}
+			n += m;
+		}
+		Ok(n)
+	}
+
+	/// For internal use only.
+	#[allow(async_fn_in_trait)]
+	#[doc(hidden)]
+	#[must_use]
+	async fn read_bounded(&mut self, min: usize, max: usize) -> std::io::Result<Vec<u8>>
+	where
+		Self: Unpin,
+	{
+		let mut buf = vec![0; max];
+		let n = self.read_bounded_into(&mut buf, min, max).await?;
+		buf.truncate(n);
+		Ok(buf)
+	}
 }
+
+impl AsyncFileRead for Cursor<&[u8]> {
+	fn open(
+		&mut self,
+		_filename: &Path,
+	) -> impl std::future::Future<Output = std::io::Result<()>> + Send {
+		async move {
+			Err(std::io::Error::new(
+				std::io::ErrorKind::Other,
+				"cannot open a cursor",
+			))
+		}
+	}
+
+	fn current(&self) -> Option<&Path> {
+		None
+	}
+}
+
+// pub(crate) const READ_SIZE: usize = 4096;
 
 pub struct JournalReader<T> {
 	io: T,
