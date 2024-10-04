@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use deku::{ctx::Endian, no_std_io, prelude::*};
-use flagset::{flags, FlagSet, Flags};
+use flagset::{flags, FlagSet};
 
 use crate::reader::AsyncFileRead;
 
