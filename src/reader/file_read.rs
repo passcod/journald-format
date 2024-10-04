@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+	collections::BTreeSet,
+	path::{Path, PathBuf},
+};
 
 use futures_util::{
 	io::{AsyncReadExt, AsyncSeekExt},
@@ -22,7 +25,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// The path to the current file, if one is open.
 	fn current(&self) -> Option<&Path>;
 
-	/// Recursively list all journal files available, sorted lexicographically.
+	/// Recursively list all journal files available.
 	///
 	/// The optional prefix filters the results. If `None`, all files are listed.
 	/// The prefix may have a partial filename as the last component.
@@ -49,6 +52,28 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 		&self,
 		prefix: Option<&Path>,
 	) -> impl Stream<Item = std::io::Result<PathBuf>> + Unpin;
+
+	/// List all journal files available, sorted lexicographically.
+	///
+	/// This is a convenience method that calls [`list_files`](AsyncFileRead::list_files) and sorts the results.
+	///
+	/// You may want to override this method if you have a more efficient way to list files in sorted order.
+	fn list_files_sorted(
+		&self,
+		prefix: Option<&Path>,
+	) -> impl Stream<Item = std::io::Result<PathBuf>> + Unpin {
+		Box::pin(async_stream::try_stream! {
+			use futures_util::stream::StreamExt;
+			let mut sorted = BTreeSet::new();
+			let mut files = self.list_files(prefix);
+			while let Some(file) = files.next().await {
+				sorted.insert(file?);
+			}
+			for file in sorted {
+				yield file;
+			}
+		})
+	}
 
 	/// Make a journal filename.
 	///
