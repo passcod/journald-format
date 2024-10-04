@@ -110,10 +110,8 @@ where
 	}
 
 	/// Read entries from the current position.
-	pub async fn entries(
-		&mut self,
-	) -> std::io::Result<impl Stream<Item = std::io::Result<()>> + Unpin> {
-		Ok(futures_util::stream::empty(/* TODO */))
+	pub fn entries(&mut self) -> impl Stream<Item = std::io::Result<()>> + Unpin {
+		futures_util::stream::empty(/* TODO */)
 	}
 
 	/// Verify all data in all available journals.
