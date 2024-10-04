@@ -112,9 +112,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 		let (head_realtime, _) = rest.split_once('.').unwrap_or((rest, ""));
 
 		let file_seqnum = u128::from_le_bytes(hex::decode(file_seqnum).ok()?.try_into().ok()?);
-
 		let head_seqnum = u64::from_le_bytes(hex::decode(head_seqnum).ok()?.try_into().ok()?);
-
 		let head_realtime = u64::from_le_bytes(hex::decode(head_realtime).ok()?.try_into().ok()?);
 
 		Some(FilenameInfo {
