@@ -6,6 +6,7 @@ edition = "2021"
 description = "Read and write the journald binary disk format"
 
 [dependencies]
+async-stream = { version = "0.3.6", optional = true }
 bstr = "1.10.0"
 deku = { version = "0.18.1", default-features = false, features = ["std"] }
 flagset = "0.4.6"
@@ -13,7 +14,12 @@ futures-io = "0.3.30"
 futures-util = { version = "0.3.30", features = ["io"] }
 hex = "0.4.3"
 siphasher = "1.0.1"
+tokio = { version = "1.40.0", features = ["fs"], optional = true }
 uuid = { version = "1.10.0", features = ["v4"] }
 
 [dev-dependencies]
 tokio = { version = "1.40.0", features = ["full"] }
+
+[features]
+default = ["on-disk"]
+on-disk = ["dep:async-stream", "dep:tokio"]
