@@ -68,12 +68,45 @@ where
 
 	/// Select a journal to read from.
 	///
-	/// This doesn't do any I/O; for example setting a journal that doesn't exist will fail on the
-	/// first read.
+	/// If the journal does not exist, this will return an error and will also have unselected the
+	/// current journal.
 	///
 	/// This invalidates the current position.
-	pub fn select(&mut self, journal: JournalSelection) {
+	pub async fn select(&mut self, journal: JournalSelection) -> std::io::Result<()> {
+		self.io.close().await;
+		self.select = None;
+
+		let latest = T::make_filename(FilenameInfo::Latest {
+			machine_id: journal.machine_id,
+			scope: journal.scope.clone(),
+		});
+		if let Err(err) = self.io.open(&latest).await {
+			if err.kind() != std::io::ErrorKind::NotFound {
+				return Err(err);
+			}
+
+			// Latest does not exist, try to find an archived journal.
+			let prefix = T::make_prefix(&journal);
+			let file = {
+				let mut files = self.io.list_files(Some(&prefix));
+				let Some(file) = files.next().await else {
+					return Err(std::io::Error::new(
+						std::io::ErrorKind::NotFound,
+						"journal not found",
+					));
+				};
+				file?
+			};
+			self.io.open(&file).await?;
+		}
+
 		self.select = Some(journal);
+		Ok(())
+	}
+
+	/// Seek to a position in the journal.
+	pub async fn seek(&mut self, _seek: Seek) -> std::io::Result<()> {
+		todo!()
 	}
 
 	/// Read entries from the current position.
@@ -81,37 +114,6 @@ where
 		&mut self,
 	) -> std::io::Result<impl Stream<Item = std::io::Result<()>> + Unpin> {
 		Ok(futures_util::stream::empty(/* TODO */))
-	}
-
-	/// Seek to the end of the journal.
-	pub async fn seek_to_newest(&mut self, _scope: &str) -> std::io::Result<()> {
-		todo!()
-	}
-
-	/// Seek to the start of the journal.
-	///
-	/// Reading entries from here will output the entire journal.
-	pub async fn seek_to_oldest(&mut self, _scope: &str) -> std::io::Result<()> {
-		todo!()
-	}
-
-	/// Seek to a timestamp, or as close as possible.
-	pub async fn seek_to_timestamp(
-		&mut self,
-		_scope: &str,
-		_timestamp: u64,
-	) -> std::io::Result<()> {
-		todo!()
-	}
-
-	/// Seek to a sequence number, or as close as possible.
-	pub async fn seek_to_seqnum(&mut self, _scope: &str, _seqnum: u64) -> std::io::Result<()> {
-		todo!()
-	}
-
-	/// Seek to the start of a boot ID.
-	pub async fn seek_to_boot_id(&mut self, _scope: &str, _boot_id: u128) -> std::io::Result<()> {
-		todo!()
 	}
 
 	/// Verify all data in all available journals.
@@ -122,4 +124,25 @@ where
 	pub async fn verify_all(&mut self) -> std::io::Result<bool> {
 		todo!()
 	}
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Seek {
+	/// Seek to just after the newest entry.
+	Newest,
+
+	/// Seek to just before the oldest entry.
+	Oldest,
+
+	/// Seek to the entry closest to the given timestamp.
+	Timestamp(u64),
+
+	/// Seek to the entry closest to the given sequence number.
+	Seqnum(u64),
+
+	/// Seek to the start of the given boot ID.
+	BootId(u128),
+
+	/// Seek to the given number of entries before or after the current position.
+	Entries(i64),
 }

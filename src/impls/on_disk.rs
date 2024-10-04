@@ -41,6 +41,12 @@ impl AsyncFileRead for JournalOnDisk {
 		}
 	}
 
+	fn close(&mut self) -> impl std::future::Future<Output = ()> + Send {
+		async move {
+			self.open = None;
+		}
+	}
+
 	fn current(&self) -> Option<&Path> {
 		self.open.as_ref().map(|file| file.path.as_ref())
 	}

@@ -10,11 +10,14 @@ use super::JournalSelection;
 pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// Open a file for reading.
 	///
-	/// This should close the current file (if any).
+	/// This may close the current file (if any).
 	fn open(
 		&mut self,
 		filename: &Path,
 	) -> impl std::future::Future<Output = std::io::Result<()>> + Send;
+
+	/// Close the current file.
+	fn close(&mut self) -> impl std::future::Future<Output = ()> + Send;
 
 	/// The path to the current file, if one is open.
 	fn current(&self) -> Option<&Path>;

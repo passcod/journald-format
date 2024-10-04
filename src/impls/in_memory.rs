@@ -12,6 +12,10 @@ impl AsyncFileRead for Cursor<&[u8]> {
 		async move { Ok(()) }
 	}
 
+	fn close(&mut self) -> impl std::future::Future<Output = ()> + Send {
+		async move {}
+	}
+
 	fn current(&self) -> Option<&Path> {
 		None
 	}
