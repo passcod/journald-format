@@ -81,7 +81,7 @@ const MAX_HEADER_SIZE: usize = 272;
 
 impl From<Header> for FilenameInfo {
 	fn from(value: Header) -> Self {
-		FilenameInfo {
+		FilenameInfo::Archived {
 			machine_id: value.machine_id,
 			scope: String::new(),
 			file_seqnum: value.seqnum_id,

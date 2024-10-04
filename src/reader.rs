@@ -15,9 +15,11 @@ pub struct JournalSelection {
 
 impl From<FilenameInfo> for JournalSelection {
 	fn from(info: FilenameInfo) -> Self {
-		Self {
-			machine_id: info.machine_id,
-			scope: info.scope,
+		match info {
+			FilenameInfo::Latest { machine_id, scope } => Self { machine_id, scope },
+			FilenameInfo::Archived {
+				machine_id, scope, ..
+			} => Self { machine_id, scope },
 		}
 	}
 }
@@ -66,6 +68,9 @@ where
 
 	/// Select a journal to read from.
 	///
+	/// This doesn't do any I/O; for example setting a journal that doesn't exist will fail on the
+	/// first read.
+	///
 	/// This invalidates the current position.
 	pub fn select(&mut self, journal: JournalSelection) {
 		self.select = Some(journal);
@@ -79,8 +84,6 @@ where
 	}
 
 	/// Seek to the end of the journal.
-	///
-	/// Reading entries from here will output nothing and block until new entries are written.
 	pub async fn seek_to_newest(&mut self, _scope: &str) -> std::io::Result<()> {
 		todo!()
 	}

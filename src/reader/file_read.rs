@@ -5,6 +5,8 @@ use futures_util::{
 	Stream,
 };
 
+use super::JournalSelection;
+
 pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// Open a file for reading.
 	///
@@ -47,9 +49,10 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 
 	/// Make a journal filename.
 	///
-	/// In the systemd on-disk file scheme, this is:
+	/// In the systemd on-disk file scheme, this is either:
 	///
 	/// ```plain
+	/// (machine_id)/(scope).journal
 	/// (machine_id)/(scope)@(file_seqnum)-(head_seqnum)-(head_realtime).journal
 	/// ```
 	///
@@ -59,13 +62,24 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// This MUST be the inverse of [`parse_filename`](AsyncFileRead::parse_filename), and you should ensure that
 	/// [`make_prefix`](AsyncFileRead::make_prefix) remains compatible.
 	fn make_filename(info: FilenameInfo) -> PathBuf {
-		PathBuf::from(hex::encode(info.machine_id.to_le_bytes())).join(format!(
-			"{scope}@{file_seqnum}-{head_seqnum}-{head_realtime}.journal",
-			scope = info.scope,
-			file_seqnum = hex::encode(info.file_seqnum.to_le_bytes()),
-			head_seqnum = hex::encode(info.head_seqnum.to_le_bytes()),
-			head_realtime = hex::encode(info.head_realtime.to_le_bytes()),
-		))
+		match info {
+			FilenameInfo::Latest { machine_id, scope } => {
+				PathBuf::from(hex::encode(machine_id.to_le_bytes()))
+					.join(format!("{scope}.journal"))
+			}
+			FilenameInfo::Archived {
+				machine_id,
+				scope,
+				file_seqnum,
+				head_seqnum,
+				head_realtime,
+			} => PathBuf::from(hex::encode(machine_id.to_le_bytes())).join(format!(
+				"{scope}@{file_seqnum}-{head_seqnum}-{head_realtime}.journal",
+				file_seqnum = hex::encode(file_seqnum.to_le_bytes()),
+				head_seqnum = hex::encode(head_seqnum.to_le_bytes()),
+				head_realtime = hex::encode(head_realtime.to_le_bytes()),
+			)),
+		}
 	}
 
 	/// Make a journal filename prefix from a machine ID and scope.
@@ -79,7 +93,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// where `(machine_id)` is lowercase hex-encoded in little-endian.
 	///
 	/// This MUST be compatible with [`make_filename`](AsyncFileRead::parse_filename).
-	fn make_prefix(machine_id: u128, scope: &str) -> PathBuf {
+	fn make_prefix(JournalSelection { machine_id, scope }: &JournalSelection) -> PathBuf {
 		PathBuf::from(hex::encode(machine_id.to_le_bytes())).join(format!("{scope}@"))
 	}
 
@@ -87,9 +101,10 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	///
 	/// Returns `None` if the filename cannot be parsed.
 	///
-	/// In the systemd on-disk file scheme, this is:
+	/// In the systemd on-disk file scheme, this is either:
 	///
 	/// ```plain
+	/// (machine_id)/(scope).journal
 	/// (machine_id)/(scope)@(file_seqnum)-(head_seqnum)-(head_realtime).journal
 	/// ```
 	///
@@ -109,7 +124,14 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 				.ok()?,
 		);
 
-		let (scope, rest) = filename.split_once('@')?;
+		let Some((scope, rest)) = filename.split_once('@') else {
+			let (scope, _) = filename.split_once('.').unwrap_or((filename, ""));
+			return Some(FilenameInfo::Latest {
+				machine_id,
+				scope: scope.to_string(),
+			});
+		};
+
 		let (file_seqnum, rest) = rest.split_once('-')?;
 		let (head_seqnum, rest) = rest.split_once('-')?;
 		let (head_realtime, _) = rest.split_once('.').unwrap_or((rest, ""));
@@ -118,7 +140,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 		let head_seqnum = u64::from_le_bytes(hex::decode(head_seqnum).ok()?.try_into().ok()?);
 		let head_realtime = u64::from_le_bytes(hex::decode(head_realtime).ok()?.try_into().ok()?);
 
-		Some(FilenameInfo {
+		Some(FilenameInfo::Archived {
 			machine_id,
 			scope: scope.to_string(),
 			file_seqnum,
@@ -177,10 +199,16 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 
 /// Information contained in a journal filename.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FilenameInfo {
-	pub machine_id: u128,
-	pub scope: String,
-	pub file_seqnum: u128,
-	pub head_seqnum: u64,
-	pub head_realtime: u64,
+pub enum FilenameInfo {
+	Latest {
+		machine_id: u128,
+		scope: String,
+	},
+	Archived {
+		machine_id: u128,
+		scope: String,
+		file_seqnum: u128,
+		head_seqnum: u64,
+		head_realtime: u64,
+	},
 }
