@@ -92,9 +92,8 @@ impl Header {
 	pub async fn read<R: AsyncFileRead + Unpin>(io: &mut R) -> std::io::Result<Self> {
 		let head = io.read_bounded(MIN_HEADER_SIZE, MAX_HEADER_SIZE).await?;
 
-		let ((_, remain), header) = Header::from_bytes((&head, 0))
+		let (_, header) = Header::from_bytes((&head, 0))
 			.map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-		assert_eq!(remain, 0, "not fully parsed");
 
 		Ok(header)
 	}
