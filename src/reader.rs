@@ -1,7 +1,9 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf};
 
 pub use file_read::{AsyncFileRead, FilenameInfo};
 use futures_util::{Stream, StreamExt as _};
+
+use crate::header::Header;
 
 mod file_read;
 
@@ -24,9 +26,15 @@ impl From<FilenameInfo> for JournalSelection {
 	}
 }
 
+#[derive(Debug)]
+struct CurrentFile {
+	header: Header,
+}
+
 pub struct JournalReader<T> {
 	io: T,
 	select: Option<JournalSelection>,
+	current: Option<CurrentFile>,
 }
 
 impl<T> std::fmt::Debug for JournalReader<T> {
@@ -44,7 +52,11 @@ where
 {
 	/// Initialize a new journal reader.
 	pub fn new(io: T) -> Self {
-		Self { io, select: None }
+		Self {
+			io,
+			select: None,
+			current: None,
+		}
 	}
 
 	/// List all available journals (machine ID, scope).
@@ -75,6 +87,7 @@ where
 	pub async fn select(&mut self, journal: JournalSelection) -> std::io::Result<()> {
 		self.io.close().await;
 		self.select = None;
+		self.current = None;
 
 		let latest = T::make_filename(FilenameInfo::Latest {
 			machine_id: journal.machine_id,
@@ -105,8 +118,36 @@ where
 	}
 
 	/// Seek to a position in the journal.
-	pub async fn seek(&mut self, _seek: Seek) -> std::io::Result<()> {
-		todo!()
+	pub async fn seek(&mut self, seek: Seek) -> std::io::Result<()> {
+		let (selected, prefix) = self.selected_journal()?;
+
+		match seek {
+			Seek::Oldest => {
+				let oldest = self
+					.io
+					.list_files_sorted(Some(&prefix))
+					.next()
+					.await
+					.ok_or_else(|| {
+						std::io::Error::new(std::io::ErrorKind::NotFound, "no files found")
+					})??;
+				self.io.open(&oldest).await?;
+				self.load().await?;
+				// TODO: Set position to the first entry.
+				Ok(())
+			}
+			Seek::Newest => {
+				let latest = T::make_filename(FilenameInfo::Latest {
+					machine_id: selected.machine_id,
+					scope: selected.scope.clone(),
+				});
+				self.io.open(&latest).await?;
+				self.load().await?;
+				// TODO: Set position to the last entry.
+				Ok(())
+			}
+			_ => todo!(),
+		}
 	}
 
 	/// Read entries from the current position.
@@ -121,6 +162,25 @@ where
 	/// only the data that is actually read is verified.
 	pub async fn verify_all(&mut self) -> std::io::Result<bool> {
 		todo!()
+	}
+
+	// == Internal ==
+
+	/// Get the selected journal and its prefix, failing if no journal is selected.
+	fn selected_journal(&self) -> std::io::Result<(&JournalSelection, PathBuf)> {
+		self.select
+			.as_ref()
+			.ok_or_else(|| {
+				std::io::Error::new(std::io::ErrorKind::NotConnected, "no journal selected")
+			})
+			.map(|j| (j, T::make_prefix(j)))
+	}
+
+	/// Load the header and base structures of the current open file into memory.
+	async fn load(&mut self) -> std::io::Result<()> {
+		let header = Header::read(&mut self.io).await?;
+		self.current = Some(CurrentFile { header });
+		Ok(())
 	}
 }
 
