@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+	num::{NonZeroU128, NonZeroU32, NonZeroU64},
+	path::PathBuf,
+};
 
 use deku::{ctx::Endian, no_std_io, prelude::*};
 use flagset::{flags, FlagSet};
@@ -24,10 +27,10 @@ pub struct Header {
 	#[deku(pad_bytes_after = "7")]
 	pub state: State, // 8 = 24
 
-	pub file_id: u128,            // 16 = 40
-	pub machine_id: u128,         // 16 = 56
-	pub tail_entry_boot_id: u128, // 16 = 72
-	pub seqnum_id: u128,          // 16 = 88
+	pub file_id: u128,                           // 16 = 40
+	pub machine_id: u128,                        // 16 = 56
+	pub tail_entry_boot_id: Option<NonZeroU128>, // 16 = 72
+	pub seqnum_id: NonZeroU128,                  // 16 = 88
 
 	pub header_size: u64,             // 8 = 96
 	pub arena_size: u64,              // 8 = 104
@@ -49,31 +52,31 @@ pub struct Header {
 
 	// added in systemd 187
 	#[deku(cond = "*header_size > 208")]
-	pub n_data: u64, // 8 = 216
+	pub n_data: Option<u64>, // 8 = 216
 	#[deku(cond = "*header_size > 216")]
-	pub n_fields: u64, // 8 = 224
+	pub n_fields: Option<u64>, // 8 = 224
 
 	// added in systemd 189
 	#[deku(cond = "*header_size > 224")]
-	pub n_tags: u64, // 8 = 232
+	pub n_tags: Option<u64>, // 8 = 232
 	#[deku(cond = "*header_size > 232")]
-	pub n_entry_arrays: u64, // 8 = 240
+	pub n_entry_arrays: Option<u64>, // 8 = 240
 
 	// added in systemd 246
 	#[deku(cond = "*header_size > 240")]
-	pub data_hash_chain_depth: u64, // 8 = 248
+	pub data_hash_chain_depth: Option<u64>, // 8 = 248
 	#[deku(cond = "*header_size > 248")]
-	pub field_hash_chain_depth: u64, // 8 = 256
+	pub field_hash_chain_depth: Option<u64>, // 8 = 256
 
 	// added in systemd 252
 	#[deku(cond = "*header_size > 256")]
-	pub tail_entry_array_offset: u32, // 4 = 260
+	pub tail_entry_array_offset: Option<NonZeroU32>, // 4 = 260
 	#[deku(cond = "*header_size > 260")]
-	pub tail_entry_array_n_entries: u32, // 4 = 264
+	pub tail_entry_array_n_entries: Option<NonZeroU32>, // 4 = 264
 
 	// added in systemd 254
 	#[deku(cond = "*header_size > 264")]
-	pub tail_entry_offset: u64, // 8 = 272
+	pub tail_entry_offset: Option<NonZeroU64>, // 8 = 272
 }
 
 const MIN_HEADER_SIZE: usize = 208;
@@ -95,7 +98,7 @@ impl Header {
 	pub fn filename(&self, scope: &str) -> PathBuf {
 		PathBuf::from(hex::encode(self.machine_id.to_le_bytes())).join(format!(
 			"{scope}@{file_seqnum}-{head_seqnum}-{head_realtime}.journal",
-			file_seqnum = hex::encode(self.seqnum_id.to_le_bytes()),
+			file_seqnum = hex::encode(self.seqnum_id.get().to_le_bytes()),
 			head_seqnum = hex::encode(self.head_entry_seqnum.to_le_bytes()),
 			head_realtime = hex::encode(self.head_entry_realtime.to_le_bytes()),
 		))
@@ -159,14 +162,15 @@ async fn test_header_parse() {
 				0xc4, 0x44, 0xc7, 0x1c, 0x03, 0x8d, 0x45, 0xb0, 0xaf, 0x20, 0x14, 0x44, 0xa8, 0x3b,
 				0x91, 0xc9
 			]),
-			tail_entry_boot_id: u128::from_le_bytes([
+			tail_entry_boot_id: NonZeroU128::new(u128::from_le_bytes([
 				0x82, 0xed, 0xa8, 0xaf, 0x55, 0x80, 0x4a, 0xbe, 0x8e, 0xca, 0x8e, 0xfb, 0x40, 0x72,
 				0xc6, 0x98,
-			]),
-			seqnum_id: u128::from_le_bytes([
+			])),
+			seqnum_id: NonZeroU128::new(u128::from_le_bytes([
 				0xae, 0x25, 0x7a, 0x22, 0x4b, 0x70, 0x40, 0x5a, 0x90, 0x42, 0xa9, 0x9a, 0xef, 0x05,
 				0x7c, 0xe0,
-			]),
+			]))
+			.unwrap(),
 			header_size: MAX_HEADER_SIZE as _,
 			arena_size: 41942768,
 			data_hash_table_offset: 5632,
@@ -182,15 +186,15 @@ async fn test_header_parse() {
 			head_entry_realtime: 1727779531788676,
 			tail_entry_realtime: 1727960184258339,
 			tail_entry_monotonic: 370782072822,
-			n_data: 102052,
-			n_fields: 108,
-			n_tags: 0,
-			n_entry_arrays: 29837,
-			data_hash_chain_depth: 4,
-			field_hash_chain_depth: 2,
-			tail_entry_array_offset: 15930904,
-			tail_entry_array_n_entries: 56282,
-			tail_entry_offset: 40376176,
+			n_data: Some(102052),
+			n_fields: Some(108),
+			n_tags: Some(0),
+			n_entry_arrays: Some(29837),
+			data_hash_chain_depth: Some(4),
+			field_hash_chain_depth: Some(2),
+			tail_entry_array_offset: NonZeroU32::new(15930904),
+			tail_entry_array_n_entries: NonZeroU32::new(56282),
+			tail_entry_offset: NonZeroU64::new(40376176),
 		}
 	);
 }
@@ -274,7 +278,7 @@ impl IncompatibleFlag {
 		reader: &mut Reader<R>,
 	) -> Result<FlagSet<Self>, DekuError> {
 		let value = u32::from_reader_with_ctx(reader, Endian::Little)?;
-		Ok(FlagSet::new_truncated(value))
+		FlagSet::new(value).map_err(|_| DekuError::Assertion("Unknown incompatible flags".into()))
 	}
 
 	fn deku_writer<W: std::io::Write + std::io::Seek>(
