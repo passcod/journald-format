@@ -1,7 +1,4 @@
-use std::{
-	num::{NonZeroU128, NonZeroU32, NonZeroU64},
-	path::PathBuf,
-};
+use std::num::{NonZeroU128, NonZeroU32, NonZeroU64};
 
 use deku::{ctx::Endian, no_std_io, prelude::*};
 use flagset::{flags, FlagSet};
@@ -12,69 +9,173 @@ use crate::reader::{AsyncFileRead, FilenameInfo};
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
 #[deku(endian = "little", magic = b"LPKSHHRH")]
 pub struct Header {
+	/// Compatible flags that can be ignored if not understood.
 	#[deku(
 		reader = "CompatibleFlag::deku_reader(deku::reader)",
 		writer = "CompatibleFlag::deku_writer(deku::writer, &self.compatible_flags)"
 	)]
 	pub compatible_flags: FlagSet<CompatibleFlag>, // 4 = 12
 
+	/// Incompatible flags that must be understood for compatibility.
 	#[deku(
 		reader = "IncompatibleFlag::deku_reader(deku::reader)",
 		writer = "IncompatibleFlag::deku_writer(deku::writer, &self.incompatible_flags)"
 	)]
 	pub incompatible_flags: FlagSet<IncompatibleFlag>, // 4 = 16
 
+	/// The read/write state of the journal file.
 	#[deku(pad_bytes_after = "7")]
 	pub state: State, // 8 = 24
 
-	pub file_id: u128,                           // 16 = 40
-	pub machine_id: u128,                        // 16 = 56
+	/// The unique identifier of the journal file.
+	///
+	/// Generated randomly when the file is created.
+	pub file_id: u128, // 16 = 40
+
+	/// The unique identifier of the machine that created the journal file.
+	///
+	/// Writing to the journal is only allowed from this machine.
+	pub machine_id: u128, // 16 = 56
+
+	/// Boot ID of the last entry in the journal file.
+	///
+	/// None if the journal is empty.
 	pub tail_entry_boot_id: Option<NonZeroU128>, // 16 = 72
-	pub seqnum_id: NonZeroU128,                  // 16 = 88
 
-	pub header_size: NonZeroU64,             // 8 = 96
-	pub arena_size: NonZeroU64,              // 8 = 104
-	pub data_hash_table_offset: NonZeroU64,  // 8 = 112
-	pub data_hash_table_size: NonZeroU64,    // 8 = 120
+	/// The unique identifier of the sequence number domain.
+	///
+	/// This is created at random when the first journal file is created. Subsequently created
+	/// journal files will have the same seqnum_id. This is used to correctly interleave entries.
+	///
+	/// Within a single seqnum_id, all seqnum values of a domain are monotonic.
+	pub seqnum_id: NonZeroU128, // 16 = 88
+
+	/// The size of the header in bytes.
+	pub header_size: NonZeroU64, // 8 = 96
+
+	/// The allocated size of the journal file in bytes after the header.
+	pub arena_size: NonZeroU64, // 8 = 104
+
+	/// The offset of the data hash table in the journal file.
+	///
+	/// A journal file always has a data hash table, even if it is empty.
+	pub data_hash_table_offset: NonZeroU64, // 8 = 112
+
+	/// The size of the data hash table in bytes.
+	pub data_hash_table_size: NonZeroU64, // 8 = 120
+
+	/// The offset of the field hash table in the journal file.
+	///
+	/// A journal file always has a field hash table, even if it is empty.
 	pub field_hash_table_offset: NonZeroU64, // 8 = 128
-	pub field_hash_table_size: NonZeroU64,   // 8 = 136
-	pub tail_object_offset: NonZeroU64,      // 8 = 144
 
+	/// The size of the field hash table in bytes.
+	pub field_hash_table_size: NonZeroU64, // 8 = 136
+
+	/// The offset of the last object in the journal file.
+	///
+	/// As journal files will always have a data and field hash table, which are objects, this is
+	/// always non-zero.
+	pub tail_object_offset: NonZeroU64, // 8 = 144
+
+	/// The number of objects in the journal file.
+	///
+	/// As journal files will always have a data and field hash table, which are objects, this is
+	/// always non-zero.
 	pub n_objects: NonZeroU64, // 8 = 152
-	pub n_entries: u64,        // 8 = 160
 
-	pub tail_entry_seqnum: Option<NonZeroU64>,    // 8 = 168
-	pub head_entry_seqnum: Option<NonZeroU64>,    // 8 = 176
-	pub entry_array_offset: Option<NonZeroU64>,   // 8 = 184
-	pub head_entry_realtime: Option<NonZeroU64>,  // 8 = 192
-	pub tail_entry_realtime: Option<NonZeroU64>,  // 8 = 200
+	/// The number of entries in the journal file.
+	pub n_entries: u64, // 8 = 160
+
+	/// The sequence number of the last entry in the journal file.
+	///
+	/// None if the journal is empty.
+	pub tail_entry_seqnum: Option<NonZeroU64>, // 8 = 168
+
+	/// The sequence number of the first entry in the journal file.
+	///
+	/// None if the journal is empty.
+	pub head_entry_seqnum: Option<NonZeroU64>, // 8 = 176
+
+	/// The offset of the first entry array in the journal file.
+	///
+	/// None if the journal is empty.
+	pub entry_array_offset: Option<NonZeroU64>, // 8 = 184
+
+	/// The wallclock timestamp of the first entry in the journal file.
+	///
+	/// None if the journal is empty.
+	pub head_entry_realtime: Option<NonZeroU64>, // 8 = 192
+
+	/// The wallclock timestamp of the last entry in the journal file.
+	///
+	/// None if the journal is empty.
+	pub tail_entry_realtime: Option<NonZeroU64>, // 8 = 200
+
+	/// The monotonic timestamp of the last entry in the journal file.
+	///
+	/// None if the journal is empty.
+	///
+	/// If [`CompatibleFlag::TailEntryBootId`] is not set, this field cannot be trusted and should be ignored.
 	pub tail_entry_monotonic: Option<NonZeroU64>, // 8 = 208
 
-	// added in systemd 187
+	/// The number of data objects in the journal file.
+	///
+	/// None if the journal was created before systemd 187.
 	#[deku(cond = "header_size.get() > 208")]
 	pub n_data: Option<u64>, // 8 = 216
+
+	/// The number of field objects in the journal file.
+	///
+	/// None if the journal was created before systemd 187.
 	#[deku(cond = "header_size.get() > 216")]
 	pub n_fields: Option<u64>, // 8 = 224
 
-	// added in systemd 189
+	/// The number of sealing tag objects in the journal file.
+	///
+	/// None if the journal was created before systemd 189.
 	#[deku(cond = "header_size.get() > 224")]
 	pub n_tags: Option<u64>, // 8 = 232
+
+	/// The number of entry arrays in the journal file.
+	///
+	/// None if the journal was created before systemd 240.
 	#[deku(cond = "header_size.get() > 232")]
 	pub n_entry_arrays: Option<u64>, // 8 = 240
 
-	// added in systemd 246
+	/// The depth of the longest chain of data hash objects in the journal file.
+	///
+	/// None if the journal was created before systemd 246.
+	///
+	/// This is a measure of how often there are hash collisions in the data hash table, and is used
+	/// to determine when to rotate (when collisions are too frequent).
 	#[deku(cond = "header_size.get() > 240")]
 	pub data_hash_chain_depth: Option<u64>, // 8 = 248
+
+	/// The depth of the longest chain of field hash objects in the journal file.
+	///
+	/// None if the journal was created before systemd 246.
+	///
+	/// This is a measure of how often there are hash collisions in the field hash table, and is
+	/// used to determine when to rotate (when collisions are too frequent).
 	#[deku(cond = "header_size.get() > 248")]
 	pub field_hash_chain_depth: Option<u64>, // 8 = 256
 
-	// added in systemd 252
+	/// The offset of the last entry array in the journal file.
+	///
+	/// None if the journal was created before systemd 252.
 	#[deku(cond = "header_size.get() > 256")]
 	pub tail_entry_array_offset: Option<NonZeroU32>, // 4 = 260
+
+	/// The number of entries in the last entry array in the journal file.
+	///
+	/// None if the journal was created before systemd 254.
 	#[deku(cond = "header_size.get() > 260")]
 	pub tail_entry_array_n_entries: Option<NonZeroU32>, // 4 = 264
 
-	// added in systemd 254
+	/// The offset of the last entry in the journal file.
+	///
+	/// None if the journal was created before systemd 254, or if the journal is empty.
 	#[deku(cond = "header_size.get() > 264")]
 	pub tail_entry_offset: Option<NonZeroU64>, // 8 = 272
 }
