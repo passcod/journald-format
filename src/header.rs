@@ -32,16 +32,16 @@ pub struct Header {
 	pub tail_entry_boot_id: Option<NonZeroU128>, // 16 = 72
 	pub seqnum_id: NonZeroU128,                  // 16 = 88
 
-	pub header_size: NonZeroU64,      // 8 = 96
-	pub arena_size: u64,              // 8 = 104
-	pub data_hash_table_offset: u64,  // 8 = 112
-	pub data_hash_table_size: u64,    // 8 = 120
-	pub field_hash_table_offset: u64, // 8 = 128
-	pub field_hash_table_size: u64,   // 8 = 136
-	pub tail_object_offset: u64,      // 8 = 144
+	pub header_size: NonZeroU64,             // 8 = 96
+	pub arena_size: NonZeroU64,              // 8 = 104
+	pub data_hash_table_offset: NonZeroU64,  // 8 = 112
+	pub data_hash_table_size: NonZeroU64,    // 8 = 120
+	pub field_hash_table_offset: NonZeroU64, // 8 = 128
+	pub field_hash_table_size: NonZeroU64,   // 8 = 136
+	pub tail_object_offset: NonZeroU64,      // 8 = 144
 
-	pub n_objects: u64, // 8 = 152
-	pub n_entries: u64, // 8 = 160
+	pub n_objects: NonZeroU64, // 8 = 152
+	pub n_entries: u64,        // 8 = 160
 
 	pub tail_entry_seqnum: Option<NonZeroU64>,    // 8 = 168
 	pub head_entry_seqnum: Option<NonZeroU64>,    // 8 = 176
@@ -112,6 +112,11 @@ impl Header {
 
 		Ok(header)
 	}
+
+	pub fn offset_to_first_entry(&self) -> u64 {
+		// self.entry_array_offset
+		todo!()
+	}
 }
 
 #[cfg(test)]
@@ -172,13 +177,13 @@ async fn test_header_parse() {
 			]))
 			.unwrap(),
 			header_size: NonZeroU64::new(MAX_HEADER_SIZE as _).unwrap(),
-			arena_size: 41942768,
-			data_hash_table_offset: 5632,
-			data_hash_table_size: 233016 * HASH_ITEM_SIZE as u64,
-			field_hash_table_offset: 288,
-			field_hash_table_size: 333 * HASH_ITEM_SIZE as u64,
-			tail_object_offset: 40376176,
-			n_objects: 216711,
+			arena_size: NonZeroU64::new(41942768).unwrap(),
+			data_hash_table_offset: NonZeroU64::new(5632).unwrap(),
+			data_hash_table_size: NonZeroU64::new(233016 * HASH_ITEM_SIZE as u64).unwrap(),
+			field_hash_table_offset: NonZeroU64::new(288).unwrap(),
+			field_hash_table_size: NonZeroU64::new(333 * HASH_ITEM_SIZE as u64).unwrap(),
+			tail_object_offset: NonZeroU64::new(40376176).unwrap(),
+			n_objects: NonZeroU64::new(216711).unwrap(),
 			n_entries: 84712,
 			tail_entry_seqnum: NonZeroU64::new(3084917),
 			head_entry_seqnum: NonZeroU64::new(2972052),
