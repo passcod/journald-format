@@ -186,6 +186,20 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// For internal use only.
 	#[allow(async_fn_in_trait)]
 	#[doc(hidden)]
+	#[must_use]
+	async fn read_at(&mut self, offset: u64, size: usize) -> std::io::Result<Vec<u8>>
+	where
+		Self: Unpin,
+	{
+		let mut buf = vec![0; size];
+		self.seek(std::io::SeekFrom::Start(offset)).await?;
+		self.read_exact(&mut buf).await?;
+		Ok(buf)
+	}
+
+	/// For internal use only.
+	#[allow(async_fn_in_trait)]
+	#[doc(hidden)]
 	async fn read_bounded_into(
 		&mut self,
 		buf: &mut [u8],

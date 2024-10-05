@@ -4,7 +4,10 @@ use deku::{ctx::Endian, no_std_io, prelude::*};
 use flagset::{flags, FlagSet};
 use jiff::Timestamp;
 
-use crate::reader::{AsyncFileRead, FilenameInfo};
+use crate::{
+	reader::{AsyncFileRead, FilenameInfo},
+	tables::HashTable,
+};
 
 // magic 8 = 8
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
@@ -223,9 +226,44 @@ impl Header {
 		Ok(header)
 	}
 
-	pub fn offset_to_first_entry(&self) -> u64 {
-		// self.entry_array_offset
-		todo!()
+	/// Get the data hash table.
+	pub fn data_hash_table<'h>(&'h self) -> HashTable<'h> {
+		HashTable {
+			offset: self.data_hash_table_offset,
+			size: self.data_hash_table_size,
+			_phantom: std::marker::PhantomData,
+		}
+	}
+
+	/// Get the field hash table.
+	pub fn field_hash_table<'h>(&'h self) -> HashTable<'h> {
+		HashTable {
+			offset: self.field_hash_table_offset,
+			size: self.field_hash_table_size,
+			_phantom: std::marker::PhantomData,
+		}
+	}
+
+	/// How full the data hash table is.
+	///
+	/// This is approximated from header fields only, so is very fast, but can be inaccurate. For exact measurement
+	/// prefer to use [`HashTable::fill_level`](crate::tables::HashTable::fill_level) instead.
+	///
+	/// Returns None if the journal was created before systemd 187.
+	pub fn data_fill_level(&self) -> Option<f64> {
+		self.n_data
+			.map(|n| n as f64 / self.data_hash_table().capacity() as f64)
+	}
+
+	/// How full the field hash table is.
+	///
+	/// This is approximated from header fields only, so is very fast, but can be inaccurate. For exact measurement
+	/// prefer to use [`HashTable::fill_level`](crate::tables::HashTable::fill_level) instead.
+	///
+	/// Returns None if the journal was created before systemd 187.
+	pub fn field_fill_level(&self) -> Option<f64> {
+		self.n_fields
+			.map(|n| n as f64 / self.field_hash_table().capacity() as f64)
 	}
 }
 
