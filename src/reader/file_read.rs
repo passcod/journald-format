@@ -8,6 +8,7 @@ use futures_util::{
 	io::{AsyncReadExt, AsyncSeekExt},
 	Stream,
 };
+use jiff::Timestamp;
 
 use super::JournalSelection;
 
@@ -106,7 +107,11 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 				"{scope}@{file_seqnum}-{head_seqnum}-{head_realtime}.journal",
 				file_seqnum = hex::encode(file_seqnum.get().to_le_bytes()),
 				head_seqnum = hex::encode(head_seqnum.get().to_le_bytes()),
-				head_realtime = hex::encode(head_realtime.get().to_le_bytes()),
+				head_realtime = hex::encode(
+					u64::try_from(head_realtime.as_microsecond())
+						.unwrap_or_default()
+						.to_le_bytes()
+				),
 			)),
 		}
 	}
@@ -174,7 +179,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 			scope: scope.to_string(),
 			file_seqnum: NonZeroU128::new(file_seqnum)?,
 			head_seqnum: NonZeroU64::new(head_seqnum)?,
-			head_realtime: NonZeroU64::new(head_realtime)?,
+			head_realtime: Timestamp::from_microsecond(head_realtime.try_into().ok()?).ok()?,
 		})
 	}
 
@@ -227,7 +232,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 }
 
 /// Information contained in a journal filename.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FilenameInfo {
 	Latest {
 		machine_id: u128,
@@ -238,6 +243,6 @@ pub enum FilenameInfo {
 		scope: String,
 		file_seqnum: NonZeroU128,
 		head_seqnum: NonZeroU64,
-		head_realtime: NonZeroU64,
+		head_realtime: Timestamp,
 	},
 }

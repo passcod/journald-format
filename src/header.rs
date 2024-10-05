@@ -2,6 +2,7 @@ use std::num::{NonZeroU128, NonZeroU32, NonZeroU64};
 
 use deku::{ctx::Endian, no_std_io, prelude::*};
 use flagset::{flags, FlagSet};
+use jiff::Timestamp;
 
 use crate::reader::{AsyncFileRead, FilenameInfo};
 
@@ -105,12 +106,20 @@ pub struct Header {
 	/// The wallclock timestamp of the first entry in the journal file.
 	///
 	/// None if the journal is empty.
-	pub head_entry_realtime: Option<NonZeroU64>, // 8 = 192
+	#[deku(
+		reader = "realtime_deku_reader(deku::reader)",
+		writer = "realtime_deku_writer(deku::writer, &self.head_entry_realtime)"
+	)]
+	pub head_entry_realtime: Option<Timestamp>, // 8 = 192
 
 	/// The wallclock timestamp of the last entry in the journal file.
 	///
 	/// None if the journal is empty.
-	pub tail_entry_realtime: Option<NonZeroU64>, // 8 = 200
+	#[deku(
+		reader = "realtime_deku_reader(deku::reader)",
+		writer = "realtime_deku_writer(deku::writer, &self.head_entry_realtime)"
+	)]
+	pub tail_entry_realtime: Option<Timestamp>, // 8 = 200
 
 	/// The monotonic timestamp of the last entry in the journal file.
 	///
@@ -289,8 +298,8 @@ async fn test_header_parse() {
 			tail_entry_seqnum: NonZeroU64::new(3084917),
 			head_entry_seqnum: NonZeroU64::new(2972052),
 			entry_array_offset: NonZeroU64::new(3738008),
-			head_entry_realtime: NonZeroU64::new(1727779531788676),
-			tail_entry_realtime: NonZeroU64::new(1727960184258339),
+			head_entry_realtime: "2024-10-01T10:45:31.788676Z".parse().ok(),
+			tail_entry_realtime: "2024-10-03T12:56:24.258339Z".parse().ok(),
 			tail_entry_monotonic: NonZeroU64::new(370782072822),
 			n_data: Some(102052),
 			n_fields: Some(108),
@@ -393,6 +402,26 @@ impl IncompatibleFlag {
 	) -> Result<(), DekuError> {
 		field.bits().to_writer(writer, Endian::Little)
 	}
+}
+
+fn realtime_deku_reader<R: no_std_io::Read + no_std_io::Seek>(
+	reader: &mut Reader<R>,
+) -> Result<Option<Timestamp>, DekuError> {
+	let value = u64::from_reader_with_ctx(reader, Endian::Little)?;
+	Timestamp::from_microsecond(value.try_into()?)
+		.map_err(|err| DekuError::Assertion(format!("Invalid timestamp: {err}").into()))
+		.map(Some)
+}
+
+fn realtime_deku_writer<W: std::io::Write + std::io::Seek>(
+	writer: &mut Writer<W>,
+	field: &Option<Timestamp>,
+) -> Result<(), DekuError> {
+	let value: u64 = field
+		.map(|ts| ts.as_microsecond())
+		.unwrap_or_default()
+		.try_into()?;
+	value.to_writer(writer, Endian::Little)
 }
 
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
