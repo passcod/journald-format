@@ -2,7 +2,7 @@ use std::num::NonZeroU64;
 
 use deku::prelude::*;
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(id_type = "u8")]
 pub enum ObjectType {
 	/// Encapsulates the contents of one field of an entry, i.e. a string such
@@ -31,27 +31,34 @@ pub enum ObjectType {
 	Tag,
 }
 
-/// Format flags for objects.
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+/// Compression algorithm used for a Data object.
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(id_type = "u8")]
 #[repr(u8)]
 #[rustfmt::skip]
-pub enum ObjectFlag {
+pub enum DataCompression {
+	/// No compression.
+	None = 0b000,
+
 	/// The object is compressed with XZ.
-	CompressedXz   = 0b__1,
+	Xz   = 0b__1,
 
 	/// The object is compressed with LZ4.
-	CompressedLz4  = 0b_10,
+	Lz4  = 0b_10,
 
 	/// The object is compressed with Zstd.
-	CompressedZstd = 0b100,
+	Zstd = 0b100,
 }
 
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
 pub struct ObjectHeader {
 	pub r#type: ObjectType,
-	#[deku(pad_bytes_after = "6")]
-	pub flags: u8,
+
+	#[deku(
+		pad_bytes_after = "6",
+		assert = "*compression != DataCompression::None || *r#type == ObjectType::Data"
+	)]
+	pub compression: DataCompression,
 
 	#[deku(endian = "little")]
 	pub size: u64,
