@@ -64,10 +64,12 @@ pub struct ObjectHeader {
 	pub size: u64,
 }
 
+pub const OBJECT_HEADER_SIZE: usize = std::mem::size_of::<ObjectHeader>();
+const _: [(); OBJECT_HEADER_SIZE] = [(); 16];
+
 impl ObjectHeader {
 	pub const fn payload_size(&self) -> u64 {
-		self.size
-			.saturating_sub(std::mem::size_of::<ObjectHeader>() as _)
+		self.size.saturating_sub(OBJECT_HEADER_SIZE as _)
 	}
 }
 
