@@ -3,7 +3,7 @@ use std::num::NonZeroU64;
 use deku::prelude::*;
 
 #[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
-#[deku(id_type = "u8")]
+#[deku(id_type = "u8", endian = "endian", ctx = "endian: deku::ctx::Endian")]
 pub enum ObjectType {
 	/// Encapsulates the contents of one field of an entry, i.e. a string such
 	/// as `_SYSTEMD_UNIT=avahi-daemon.service`, or `MESSAGE=Foo had a booboo`.
@@ -33,7 +33,7 @@ pub enum ObjectType {
 
 /// Compression algorithm used for a Data object.
 #[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
-#[deku(id_type = "u8")]
+#[deku(id_type = "u8", endian = "endian", ctx = "endian: deku::ctx::Endian")]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum DataCompression {
@@ -51,6 +51,7 @@ pub enum DataCompression {
 }
 
 #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[deku(endian = "little")]
 pub struct ObjectHeader {
 	pub r#type: ObjectType,
 
@@ -60,7 +61,6 @@ pub struct ObjectHeader {
 	)]
 	pub compression: DataCompression,
 
-	#[deku(endian = "little")]
 	pub size: u64,
 }
 
