@@ -1,6 +1,6 @@
 use std::{
 	collections::BTreeSet,
-	num::NonZeroU128,
+	num::{NonZeroU128, NonZeroU64},
 	path::{Path, PathBuf},
 };
 
@@ -105,8 +105,8 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 			} => PathBuf::from(hex::encode(machine_id.to_le_bytes())).join(format!(
 				"{scope}@{file_seqnum}-{head_seqnum}-{head_realtime}.journal",
 				file_seqnum = hex::encode(file_seqnum.get().to_le_bytes()),
-				head_seqnum = hex::encode(head_seqnum.to_le_bytes()),
-				head_realtime = hex::encode(head_realtime.to_le_bytes()),
+				head_seqnum = hex::encode(head_seqnum.get().to_le_bytes()),
+				head_realtime = hex::encode(head_realtime.get().to_le_bytes()),
 			)),
 		}
 	}
@@ -173,8 +173,8 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 			machine_id,
 			scope: scope.to_string(),
 			file_seqnum: NonZeroU128::new(file_seqnum)?,
-			head_seqnum,
-			head_realtime,
+			head_seqnum: NonZeroU64::new(head_seqnum)?,
+			head_realtime: NonZeroU64::new(head_realtime)?,
 		})
 	}
 
@@ -237,7 +237,7 @@ pub enum FilenameInfo {
 		machine_id: u128,
 		scope: String,
 		file_seqnum: NonZeroU128,
-		head_seqnum: u64,
-		head_realtime: u64,
+		head_seqnum: NonZeroU64,
+		head_realtime: NonZeroU64,
 	},
 }

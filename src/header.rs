@@ -32,7 +32,7 @@ pub struct Header {
 	pub tail_entry_boot_id: Option<NonZeroU128>, // 16 = 72
 	pub seqnum_id: NonZeroU128,                  // 16 = 88
 
-	pub header_size: u64,             // 8 = 96
+	pub header_size: NonZeroU64,      // 8 = 96
 	pub arena_size: u64,              // 8 = 104
 	pub data_hash_table_offset: u64,  // 8 = 112
 	pub data_hash_table_size: u64,    // 8 = 120
@@ -43,39 +43,39 @@ pub struct Header {
 	pub n_objects: u64, // 8 = 152
 	pub n_entries: u64, // 8 = 160
 
-	pub tail_entry_seqnum: u64,    // 8 = 168
-	pub head_entry_seqnum: u64,    // 8 = 176
-	pub entry_array_offset: u64,   // 8 = 184
-	pub head_entry_realtime: u64,  // 8 = 192
-	pub tail_entry_realtime: u64,  // 8 = 200
-	pub tail_entry_monotonic: u64, // 8 = 208
+	pub tail_entry_seqnum: Option<NonZeroU64>,    // 8 = 168
+	pub head_entry_seqnum: Option<NonZeroU64>,    // 8 = 176
+	pub entry_array_offset: Option<NonZeroU64>,   // 8 = 184
+	pub head_entry_realtime: Option<NonZeroU64>,  // 8 = 192
+	pub tail_entry_realtime: Option<NonZeroU64>,  // 8 = 200
+	pub tail_entry_monotonic: Option<NonZeroU64>, // 8 = 208
 
 	// added in systemd 187
-	#[deku(cond = "*header_size > 208")]
+	#[deku(cond = "header_size.get() > 208")]
 	pub n_data: Option<u64>, // 8 = 216
-	#[deku(cond = "*header_size > 216")]
+	#[deku(cond = "header_size.get() > 216")]
 	pub n_fields: Option<u64>, // 8 = 224
 
 	// added in systemd 189
-	#[deku(cond = "*header_size > 224")]
+	#[deku(cond = "header_size.get() > 224")]
 	pub n_tags: Option<u64>, // 8 = 232
-	#[deku(cond = "*header_size > 232")]
+	#[deku(cond = "header_size.get() > 232")]
 	pub n_entry_arrays: Option<u64>, // 8 = 240
 
 	// added in systemd 246
-	#[deku(cond = "*header_size > 240")]
+	#[deku(cond = "header_size.get() > 240")]
 	pub data_hash_chain_depth: Option<u64>, // 8 = 248
-	#[deku(cond = "*header_size > 248")]
+	#[deku(cond = "header_size.get() > 248")]
 	pub field_hash_chain_depth: Option<u64>, // 8 = 256
 
 	// added in systemd 252
-	#[deku(cond = "*header_size > 256")]
+	#[deku(cond = "header_size.get() > 256")]
 	pub tail_entry_array_offset: Option<NonZeroU32>, // 4 = 260
-	#[deku(cond = "*header_size > 260")]
+	#[deku(cond = "header_size.get() > 260")]
 	pub tail_entry_array_n_entries: Option<NonZeroU32>, // 4 = 264
 
 	// added in systemd 254
-	#[deku(cond = "*header_size > 264")]
+	#[deku(cond = "header_size.get() > 264")]
 	pub tail_entry_offset: Option<NonZeroU64>, // 8 = 272
 }
 
@@ -84,26 +84,26 @@ const MAX_HEADER_SIZE: usize = 272;
 
 impl From<Header> for FilenameInfo {
 	fn from(value: Header) -> Self {
-		FilenameInfo::Archived {
-			machine_id: value.machine_id,
-			scope: String::new(),
-			file_seqnum: value.seqnum_id,
-			head_seqnum: value.head_entry_seqnum,
-			head_realtime: value.head_entry_realtime,
+		if let (Some(head_seqnum), Some(head_realtime)) =
+			(value.head_entry_seqnum, value.head_entry_realtime)
+		{
+			FilenameInfo::Archived {
+				machine_id: value.machine_id,
+				scope: String::new(),
+				file_seqnum: value.seqnum_id,
+				head_seqnum,
+				head_realtime,
+			}
+		} else {
+			FilenameInfo::Latest {
+				machine_id: value.machine_id,
+				scope: String::new(),
+			}
 		}
 	}
 }
 
 impl Header {
-	pub fn filename(&self, scope: &str) -> PathBuf {
-		PathBuf::from(hex::encode(self.machine_id.to_le_bytes())).join(format!(
-			"{scope}@{file_seqnum}-{head_seqnum}-{head_realtime}.journal",
-			file_seqnum = hex::encode(self.seqnum_id.get().to_le_bytes()),
-			head_seqnum = hex::encode(self.head_entry_seqnum.to_le_bytes()),
-			head_realtime = hex::encode(self.head_entry_realtime.to_le_bytes()),
-		))
-	}
-
 	pub async fn read<R: AsyncFileRead + Unpin>(io: &mut R) -> std::io::Result<Self> {
 		let head = io.read_bounded(MIN_HEADER_SIZE, MAX_HEADER_SIZE).await?;
 
@@ -171,7 +171,7 @@ async fn test_header_parse() {
 				0x7c, 0xe0,
 			]))
 			.unwrap(),
-			header_size: MAX_HEADER_SIZE as _,
+			header_size: NonZeroU64::new(MAX_HEADER_SIZE as _).unwrap(),
 			arena_size: 41942768,
 			data_hash_table_offset: 5632,
 			data_hash_table_size: 233016 * HASH_ITEM_SIZE as u64,
@@ -180,12 +180,12 @@ async fn test_header_parse() {
 			tail_object_offset: 40376176,
 			n_objects: 216711,
 			n_entries: 84712,
-			tail_entry_seqnum: 3084917,
-			head_entry_seqnum: 2972052,
-			entry_array_offset: 3738008,
-			head_entry_realtime: 1727779531788676,
-			tail_entry_realtime: 1727960184258339,
-			tail_entry_monotonic: 370782072822,
+			tail_entry_seqnum: NonZeroU64::new(3084917),
+			head_entry_seqnum: NonZeroU64::new(2972052),
+			entry_array_offset: NonZeroU64::new(3738008),
+			head_entry_realtime: NonZeroU64::new(1727779531788676),
+			tail_entry_realtime: NonZeroU64::new(1727960184258339),
+			tail_entry_monotonic: NonZeroU64::new(370782072822),
 			n_data: Some(102052),
 			n_fields: Some(108),
 			n_tags: Some(0),
