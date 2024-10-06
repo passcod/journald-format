@@ -56,6 +56,10 @@ pub enum ObjectType {
 	/// Consists of a Forward Secure Sealing tag for all data from the beginning
 	/// of the file or the last tag written (whichever is later).
 	Tag,
+
+	/// Unknown objects are skipped.
+	#[deku(id_pat = "_")]
+	Unknown,
 }
 
 /// Compression algorithm used for a Data object.
@@ -84,7 +88,7 @@ pub struct ObjectHeader {
 
 	#[deku(
 		pad_bytes_after = "6",
-		assert = "*compression != DataCompression::None || *r#type == ObjectType::Data"
+		// assert = "*compression != DataCompression::None || *r#type == ObjectType::Data"
 	)]
 	pub compression: DataCompression,
 
