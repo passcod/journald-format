@@ -24,7 +24,7 @@ pub(crate) trait SimpleRead: for<'a> DekuContainerRead<'a> {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(id_type = "u8", endian = "endian", ctx = "endian: deku::ctx::Endian")]
 pub enum ObjectType {
 	/// Encapsulates the contents of one field of an entry, i.e. a string such
@@ -54,7 +54,7 @@ pub enum ObjectType {
 }
 
 /// Compression algorithm used for a Data object.
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(id_type = "u8", endian = "endian", ctx = "endian: deku::ctx::Endian")]
 #[repr(u8)]
 #[rustfmt::skip]
@@ -72,7 +72,7 @@ pub enum DataCompression {
 	Zstd = 0b100,
 }
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct ObjectHeader {
 	pub r#type: ObjectType,
@@ -97,7 +97,7 @@ impl ObjectHeader {
 	}
 }
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct DataObjectHeader {
 	pub hash: u64,
@@ -108,14 +108,14 @@ pub struct DataObjectHeader {
 	pub n_entries: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct DataObjectCompactPayloadHeader {
 	pub tail_entry_array_offset: u32,
 	pub tail_entry_array_n_entries: u32,
 }
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct FieldObjectHeader {
 	pub hash: u64,
@@ -123,7 +123,7 @@ pub struct FieldObjectHeader {
 	pub next_data_offset: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryObjectHeader {
 	pub seqnum: NonZeroU64,
@@ -154,13 +154,13 @@ pub struct EntryArrayObjectHeader {
 
 impl SimpleRead for EntryArrayObjectHeader {}
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryArrayRegularItem {
 	pub offset: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryArrayCompactItem {
 	pub offset: u32,
@@ -168,7 +168,7 @@ pub struct EntryArrayCompactItem {
 
 pub const TAG_LENGTH: usize = 256 / 8;
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct TagObjectHeader {
 	pub seqnum: NonZeroU64,
