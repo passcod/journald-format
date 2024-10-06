@@ -60,6 +60,14 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// This is a convenience method that calls [`list_files`](AsyncFileRead::list_files) and sorts the results.
 	///
 	/// You may want to override this method if you have a more efficient way to list files in sorted order.
+	///
+	/// The order is:
+	///
+	/// ```plain
+	/// alpha/system@a-b-c.journal
+	/// alpha/system@d-e-f.journal
+	/// alpha/system.journal
+	/// ```
 	#[tracing::instrument(level = "trace", skip(self))]
 	fn list_files_sorted(
 		&self,
@@ -266,12 +274,8 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 }
 
 /// Information contained in a journal filename.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilenameInfo {
-	Latest {
-		machine_id: u128,
-		scope: String,
-	},
 	Archived {
 		machine_id: u128,
 		scope: String,
@@ -279,4 +283,57 @@ pub enum FilenameInfo {
 		head_seqnum: NonZeroU64,
 		head_realtime: Timestamp,
 	},
+	Latest {
+		machine_id: u128,
+		scope: String,
+	},
+}
+
+impl PartialOrd for FilenameInfo {
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		match (self, other) {
+			(
+				Self::Archived {
+					machine_id: a_machine_id,
+					scope: a_scope,
+					file_seqnum: a_file_seqnum,
+					head_seqnum: a_head_seqnum,
+					head_realtime: a_head_realtime,
+				},
+				Self::Archived {
+					machine_id: b_machine_id,
+					scope: b_scope,
+					file_seqnum: b_file_seqnum,
+					head_seqnum: b_head_seqnum,
+					head_realtime: b_head_realtime,
+				},
+			) => a_head_realtime
+				.partial_cmp(b_head_realtime)
+				.or_else(|| a_head_seqnum.partial_cmp(b_head_seqnum))
+				.or_else(|| a_file_seqnum.partial_cmp(b_file_seqnum))
+				.or_else(|| a_scope.partial_cmp(b_scope))
+				.or_else(|| a_machine_id.partial_cmp(b_machine_id)),
+			(
+				Self::Latest {
+					machine_id: a_machine_id,
+					scope: a_scope,
+				},
+				Self::Latest {
+					machine_id: b_machine_id,
+					scope: b_scope,
+				},
+			) => a_scope
+				.partial_cmp(b_scope)
+				.or_else(|| a_machine_id.partial_cmp(b_machine_id)),
+			(Self::Archived { .. }, Self::Latest { .. }) => Some(std::cmp::Ordering::Less),
+			(Self::Latest { .. }, Self::Archived { .. }) => Some(std::cmp::Ordering::Greater),
+		}
+	}
+}
+
+impl Ord for FilenameInfo {
+	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+		// UNWRAP: we know partial_cmp is always Some from above
+		self.partial_cmp(other).unwrap()
+	}
 }
