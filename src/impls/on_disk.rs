@@ -109,6 +109,7 @@ impl AsyncSeek for JournalOnDisk {
 				)))
 			},
 			|open| {
+				let _ = Pin::new(&mut open.file).poll_complete(cx);
 				if let Err(err) = Pin::new(&mut open.file).start_seek(pos) {
 					return Poll::Ready(Err(err));
 				}
