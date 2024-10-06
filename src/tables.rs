@@ -41,7 +41,7 @@ impl<'h> HashTable<'h> {
 			let mut offset = self.offset.get();
 			let end = self.offset.get() + self.size.get();
 			while offset < end {
-				let item = io.read_at(offset, HASH_ITEM_SIZE).await?;
+				let item = io.read_some_at(offset, HASH_ITEM_SIZE).await?;
 				offset += HASH_ITEM_SIZE as u64;
 				let (_, item) = HashItem::from_bytes((&item, 0))?;
 				yield item;

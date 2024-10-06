@@ -10,7 +10,7 @@ use crate::{
 };
 
 // magic 8 = 8
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little", magic = b"LPKSHHRH")]
 pub struct Header {
 	/// Compatible flags that can be ignored if not understood.
@@ -103,8 +103,8 @@ pub struct Header {
 
 	/// The offset of the first entry array in the journal file.
 	///
-	/// None if the journal is empty.
-	pub entry_array_offset: Option<NonZeroU64>, // 8 = 184
+	/// There's always at least one entry array in a journal.
+	pub entry_array_offset: NonZeroU64, // 8 = 184
 
 	/// The wallclock timestamp of the first entry in the journal file.
 	///
@@ -335,7 +335,7 @@ async fn test_header_parse() {
 			n_entries: 84712,
 			tail_entry_seqnum: NonZeroU64::new(3084917),
 			head_entry_seqnum: NonZeroU64::new(2972052),
-			entry_array_offset: NonZeroU64::new(3738008),
+			entry_array_offset: NonZeroU64::new(3738008).unwrap(),
 			head_entry_realtime: "2024-10-01T10:45:31.788676Z".parse().ok(),
 			tail_entry_realtime: "2024-10-03T12:56:24.258339Z".parse().ok(),
 			tail_entry_monotonic: NonZeroU64::new(370782072822),
@@ -462,7 +462,7 @@ fn realtime_deku_writer<W: std::io::Write + std::io::Seek>(
 	value.to_writer(writer, Endian::Little)
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(id_type = "u8", endian = "endian", ctx = "endian: deku::ctx::Endian")]
 #[repr(u8)]
 pub enum State {

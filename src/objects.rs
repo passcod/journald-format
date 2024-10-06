@@ -1,6 +1,28 @@
-use std::num::NonZeroU64;
+use std::{io::SeekFrom, num::NonZeroU64};
 
 use deku::prelude::*;
+
+use crate::reader::AsyncFileRead;
+
+pub(crate) trait SimpleRead: for<'a> DekuContainerRead<'a> {
+	async fn read<R: AsyncFileRead + Unpin>(io: &mut R) -> std::io::Result<Self>
+	where
+		Self: Sized,
+	{
+		let data = io.read_some(std::mem::size_of::<Self>()).await?;
+		Self::from_bytes((&data, 0))
+			.map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+			.map(|(_, d)| d)
+	}
+
+	async fn read_at<R: AsyncFileRead + Unpin>(io: &mut R, offset: u64) -> std::io::Result<Self>
+	where
+		Self: Sized,
+	{
+		io.seek(SeekFrom::Start(offset)).await?;
+		Self::read(io).await
+	}
+}
 
 #[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(id_type = "u8", endian = "endian", ctx = "endian: deku::ctx::Endian")]
@@ -50,7 +72,7 @@ pub enum DataCompression {
 	Zstd = 0b100,
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct ObjectHeader {
 	pub r#type: ObjectType,
@@ -67,13 +89,15 @@ pub struct ObjectHeader {
 pub const OBJECT_HEADER_SIZE: usize = std::mem::size_of::<ObjectHeader>();
 const _: [(); OBJECT_HEADER_SIZE] = [(); 16];
 
+impl SimpleRead for ObjectHeader {}
+
 impl ObjectHeader {
 	pub const fn payload_size(&self) -> u64 {
 		self.size.saturating_sub(OBJECT_HEADER_SIZE as _)
 	}
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct DataObjectHeader {
 	pub hash: u64,
@@ -84,14 +108,14 @@ pub struct DataObjectHeader {
 	pub n_entries: u64,
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct DataObjectCompactPayloadHeader {
 	pub tail_entry_array_offset: u32,
 	pub tail_entry_array_n_entries: u32,
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct FieldObjectHeader {
 	pub hash: u64,
@@ -99,7 +123,7 @@ pub struct FieldObjectHeader {
 	pub next_data_offset: u64,
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryObjectHeader {
 	pub seqnum: NonZeroU64,
@@ -109,32 +133,34 @@ pub struct EntryObjectHeader {
 	pub xor_hash: u64,
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryObjectCompactItem {
 	pub object_offset: u32,
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryObjectRegularItem {
 	pub object_offset: u64,
 	pub hash: u64,
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryArrayObjectHeader {
 	pub next_entry_array_offset: Option<NonZeroU64>,
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+impl SimpleRead for EntryArrayObjectHeader {}
+
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryArrayRegularItem {
 	pub offset: u64,
 }
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryArrayCompactItem {
 	pub offset: u32,
@@ -142,7 +168,7 @@ pub struct EntryArrayCompactItem {
 
 pub const TAG_LENGTH: usize = 256 / 8;
 
-#[derive(Debug, PartialEq, DekuRead, DekuWrite)]
+#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct TagObjectHeader {
 	pub seqnum: NonZeroU64,

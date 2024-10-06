@@ -1,9 +1,12 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, num::NonZeroU64, path::PathBuf};
 
 pub use file_read::{AsyncFileRead, FilenameInfo};
 use futures_util::{Stream, StreamExt as _};
 
-use crate::header::Header;
+use crate::{
+	header::Header,
+	objects::{EntryArrayObjectHeader, ObjectHeader, ObjectType, SimpleRead, OBJECT_HEADER_SIZE},
+};
 
 mod file_read;
 
@@ -29,6 +32,14 @@ impl From<FilenameInfo> for JournalSelection {
 #[derive(Debug)]
 struct CurrentFile {
 	header: Header,
+	position: Position,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct Position {
+	entry_array_offset: NonZeroU64,
+	index: Option<u64>,
+	// Some(n) is "next read will be n", None is "next read will be the chained array"
 }
 
 pub struct JournalReader<T> {
@@ -133,7 +144,6 @@ where
 					})??;
 				self.io.open(&oldest).await?;
 				self.load().await?;
-				// TODO: Set position to the first entry.
 				Ok(())
 			}
 			Seek::Newest => {
@@ -143,7 +153,7 @@ where
 				});
 				self.io.open(&latest).await?;
 				self.load().await?;
-				// TODO: Set position to the last entry.
+				self.skip_to_end().await?;
 				Ok(())
 			}
 			_ => todo!(),
@@ -177,9 +187,58 @@ where
 	}
 
 	/// Load the header and base structures of the current open file into memory.
+	///
+	/// Also set the position to the first entry.
 	async fn load(&mut self) -> std::io::Result<()> {
 		let header = Header::read(&mut self.io).await?;
-		self.current = Some(CurrentFile { header });
+		let position = Position {
+			entry_array_offset: header.entry_array_offset,
+			index: Some(0),
+		};
+		self.current = Some(CurrentFile { header, position });
+		Ok(())
+	}
+
+	/// Follow the chain of primary entry arrays until the last, and set position.
+	///
+	/// load() must have been called first.
+	async fn skip_to_end(&mut self) -> std::io::Result<()> {
+		let Some(current) = &mut self.current else {
+			return Err(std::io::Error::new(
+				std::io::ErrorKind::NotConnected,
+				"no journal loaded",
+			));
+		};
+
+		loop {
+			let object =
+				ObjectHeader::read_at(&mut self.io, current.position.entry_array_offset.get())
+					.await?;
+			if object.r#type != ObjectType::EntryArray {
+				return Err(std::io::Error::new(
+					std::io::ErrorKind::InvalidData,
+					format!(
+						"expected object of type {:?}, found {:?}",
+						ObjectType::EntryArray,
+						object.r#type
+					),
+				));
+			}
+
+			let entry_array = EntryArrayObjectHeader::read_at(
+				&mut self.io,
+				current.position.entry_array_offset.get() + OBJECT_HEADER_SIZE as u64,
+			)
+			.await?;
+			match entry_array.next_entry_array_offset {
+				None => break,
+				Some(next) => {
+					current.position.entry_array_offset = next;
+					current.position.index = None;
+				}
+			}
+		}
+
 		Ok(())
 	}
 }
