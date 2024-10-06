@@ -1,8 +1,11 @@
-use std::{io::SeekFrom, num::NonZeroU64};
+use std::{
+	io::SeekFrom,
+	num::{NonZeroU32, NonZeroU64},
+};
 
 use deku::prelude::*;
 
-use crate::reader::AsyncFileRead;
+use crate::{header::Header, reader::AsyncFileRead};
 
 pub(crate) trait SimpleRead: for<'a> DekuContainerRead<'a> {
 	async fn read<R: AsyncFileRead + Unpin>(io: &mut R) -> std::io::Result<Self>
@@ -133,24 +136,91 @@ pub struct EntryObjectHeader {
 	pub xor_hash: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+pub const ENTRY_OBJECT_HEADER_SIZE: usize = std::mem::size_of::<EntryObjectHeader>();
+const _: [(); ENTRY_OBJECT_HEADER_SIZE] = [(); 48];
+
+impl SimpleRead for EntryObjectHeader {}
+
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryObjectCompactItem {
 	pub object_offset: u32,
 }
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+impl SimpleRead for EntryObjectCompactItem {}
+
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryObjectRegularItem {
 	pub object_offset: u64,
 	pub hash: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]
+impl SimpleRead for EntryObjectRegularItem {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Entry {
+	pub offset: NonZeroU64,
+	pub header: EntryObjectHeader,
+	pub objects: Vec<NonZeroU32>,
+}
+
+impl Entry {
+	pub(crate) async fn read_at<R: AsyncFileRead + Unpin>(
+		io: &mut R,
+		offset: u64,
+		file_header: &Header,
+	) -> std::io::Result<Self>
+	where
+		Self: Sized,
+	{
+		let object = ObjectHeader::read_at(io, offset).await?;
+
+		let header_offset = offset + OBJECT_HEADER_SIZE as u64;
+		let header = EntryObjectHeader::read_at(io, header_offset).await?;
+
+		let array_offset = header_offset + ENTRY_OBJECT_HEADER_SIZE as u64;
+		let size = file_header.sizeof_entry_object_item();
+		let capacity = object.payload_size() / size;
+		let mut objects = Vec::with_capacity(capacity as _);
+		for n in 0..capacity {
+			let object_offset = if file_header.is_compact() {
+				let item = EntryObjectCompactItem::read_at(io, array_offset + n * size).await?;
+				item.object_offset
+			} else {
+				let item = EntryObjectRegularItem::read_at(io, array_offset + n * size).await?;
+				u32::try_from(item.object_offset).map_err(|err| {
+					std::io::Error::new(
+						std::io::ErrorKind::InvalidData,
+						format!("object offset of item {n} in EntryArray:{offset} is larger than u32: {err}")
+					)
+				})?
+			};
+
+			if let Some(object_offset) = NonZeroU32::new(object_offset) {
+				objects.push(object_offset);
+			} else {
+				break;
+			}
+		}
+
+		Ok(Self {
+			// UNWRAP: offsets are always non-zero
+			offset: NonZeroU64::new(offset).unwrap(),
+			header,
+			objects,
+		})
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryArrayObjectHeader {
 	pub next_entry_array_offset: Option<NonZeroU64>,
 }
+
+pub const ENTRY_ARRAY_HEADER_SIZE: usize = std::mem::size_of::<EntryArrayObjectHeader>();
+const _: [(); ENTRY_ARRAY_HEADER_SIZE] = [(); 8];
 
 impl SimpleRead for EntryArrayObjectHeader {}
 
