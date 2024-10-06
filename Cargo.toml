@@ -15,7 +15,9 @@ futures-util = { version = "0.3.30", features = ["io"] }
 hex = "0.4.3"
 jiff = "0.1.13"
 siphasher = "1.0.1"
-tokio = { version = "1.40.0", features = ["fs"], optional = true }
+tokio = { version = "1.40.0", features = ["fs", "full"], optional = true }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = { version = "1.10.0", features = ["v4"] }
 
 [dev-dependencies]
