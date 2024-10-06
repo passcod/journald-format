@@ -137,9 +137,9 @@ impl AsyncRead for JournalOnDisk {
 				)))
 			},
 			|open| {
-				let pre = buf.len();
-				match Pin::new(&mut open.file).poll_read(cx, &mut ReadBuf::new(buf)) {
-					Poll::Ready(Ok(())) => Poll::Ready(Ok(buf.len().saturating_sub(pre))),
+				let mut buf = ReadBuf::new(buf);
+				match Pin::new(&mut open.file).poll_read(cx, &mut buf) {
+					Poll::Ready(Ok(())) => Poll::Ready(Ok(buf.filled().len())),
 					Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
 					Poll::Pending => Poll::Pending,
 				}
