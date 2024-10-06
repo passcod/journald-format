@@ -10,7 +10,7 @@ use futures_io::{AsyncRead, AsyncSeek};
 use futures_util::Stream;
 use tokio::{fs::File, io::ReadBuf};
 
-use crate::reader::AsyncFileRead;
+use crate::reader::{AsyncFileRead, FilenameInfo};
 
 struct OpenFile {
 	path: PathBuf,
@@ -54,7 +54,11 @@ impl AsyncFileRead for JournalOnDisk {
 		self.open.as_ref().map(|file| file.path.as_ref())
 	}
 
-	fn list_files(&self, prefix: Option<&Path>) -> impl Stream<Item = io::Result<PathBuf>> + Unpin {
+	#[tracing::instrument(level = "trace", skip(self))]
+	fn list_files(
+		&self,
+		prefix: Option<&Path>,
+	) -> impl Stream<Item = io::Result<FilenameInfo>> + Unpin {
 		Box::pin(try_stream! {
 			let root = match prefix {
 				Some(prefix) => self.root.join(prefix.parent().unwrap_or(prefix)),
@@ -78,9 +82,10 @@ impl AsyncFileRead for JournalOnDisk {
 							.path()
 							.to_string_lossy()
 							.starts_with(root.to_string_lossy().as_ref())
-						&& JournalOnDisk::parse_filename(&entry.path()).is_some()
 					{
-						yield entry.path();
+						if let Some(file) = Self::parse_filename(&entry.path()) {
+							yield file;
+						}
 					}
 				}
 			}

@@ -53,7 +53,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	fn list_files(
 		&self,
 		prefix: Option<&Path>,
-	) -> impl Stream<Item = std::io::Result<PathBuf>> + Unpin;
+	) -> impl Stream<Item = std::io::Result<FilenameInfo>> + Unpin;
 
 	/// List all journal files available, sorted lexicographically.
 	///
@@ -64,7 +64,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	fn list_files_sorted(
 		&self,
 		prefix: Option<&Path>,
-	) -> impl Stream<Item = std::io::Result<PathBuf>> + Unpin {
+	) -> impl Stream<Item = std::io::Result<FilenameInfo>> + Unpin {
 		Box::pin(async_stream::try_stream! {
 			use futures_util::stream::StreamExt;
 			let mut sorted = BTreeSet::new();

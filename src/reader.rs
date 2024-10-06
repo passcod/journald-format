@@ -95,10 +95,7 @@ where
 		let mut set = HashSet::new();
 		let mut files = self.io.list_files(None);
 		while let Some(file) = files.next().await {
-			let file = file?;
-			if let Some(info) = T::parse_filename(&file) {
-				set.insert(info.into());
-			}
+			set.insert(file?.into());
 		}
 
 		Ok(set)
@@ -143,7 +140,7 @@ where
 				};
 				file?
 			};
-			self.io.open(&file).await?;
+			self.io.open(&T::make_filename(file)).await?;
 		}
 
 		self.select = Some(journal);
@@ -165,7 +162,7 @@ where
 					.ok_or_else(|| {
 						std::io::Error::new(std::io::ErrorKind::NotFound, "no files found")
 					})??;
-				self.io.open(&oldest).await?;
+				self.io.open(&T::make_filename(oldest)).await?;
 				self.load().await?;
 				Ok(())
 			}

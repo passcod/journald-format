@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use futures_util::{io::Cursor, Stream};
 
-use crate::reader::AsyncFileRead;
+use crate::reader::{AsyncFileRead, FilenameInfo};
 
 impl AsyncFileRead for Cursor<&[u8]> {
 	fn open(
@@ -20,7 +20,10 @@ impl AsyncFileRead for Cursor<&[u8]> {
 		None
 	}
 
-	fn list_files(&self, _prefix: Option<&Path>) -> impl Stream<Item = std::io::Result<PathBuf>> {
+	fn list_files(
+		&self,
+		_prefix: Option<&Path>,
+	) -> impl Stream<Item = std::io::Result<FilenameInfo>> {
 		futures_util::stream::empty()
 	}
 }
