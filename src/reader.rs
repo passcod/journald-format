@@ -5,7 +5,10 @@ use futures_util::{Stream, StreamExt as _};
 
 use crate::{
 	header::Header,
-	objects::{EntryArrayObjectHeader, ObjectHeader, ObjectType, SimpleRead, OBJECT_HEADER_SIZE},
+	objects::{
+		Entry, EntryArrayObjectHeader, ObjectHeader, ObjectType, SimpleRead,
+		ENTRY_ARRAY_HEADER_SIZE, OBJECT_HEADER_SIZE,
+	},
 };
 
 mod file_read;
@@ -40,6 +43,22 @@ struct Position {
 	entry_array_offset: NonZeroU64,
 	index: Option<u64>,
 	// Some(n) is "next read will be n", None is "next read will be the chained array"
+}
+
+impl CurrentFile {
+	/// Get the offset of the current entry.
+	///
+	/// None if position.index is None
+	fn entry_index_and_offset(&self) -> Option<(u64, u64)> {
+		self.position.index.map(|index| {
+			(
+				index,
+				self.position.entry_array_offset.get()
+					+ ENTRY_ARRAY_HEADER_SIZE as u64
+					+ index * self.header.sizeof_entry_array_item(),
+			)
+		})
+	}
 }
 
 pub struct JournalReader<T> {
@@ -161,8 +180,39 @@ where
 	}
 
 	/// Read entries from the current position.
-	pub fn entries(&mut self) -> impl Stream<Item = std::io::Result<()>> + Unpin {
-		futures_util::stream::empty(/* TODO */)
+	///
+	/// Stop at the end of the journal.
+	///
+	/// If there's nothing to read, return an empty stream.
+	///
+	/// Updates the [`Position`] of the reader as it goes.
+	pub fn entries(&mut self) -> impl Stream<Item = std::io::Result<Entry>> + Unpin + '_ {
+		Box::pin(async_stream::try_stream! {
+			self.load_if_needed().await?;
+
+			loop {
+				let current = self.current.as_mut().unwrap();
+				let array_object = ObjectHeader::read_at(&mut self.io, current.position.entry_array_offset.get()).await?;
+
+				while let Some((entry_index, entry_offset)) = current.entry_index_and_offset() {
+					yield Entry::read_at(&mut self.io, entry_offset, &current.header).await?;
+					if entry_index * current.header.sizeof_entry_array_item() < array_object.payload_size() {
+						*(current.position.index.as_mut().unwrap()) += 1;
+						continue;
+					} else {
+						// we're at the end of the entry array
+						current.position.index = None;
+						break;
+					}
+				}
+
+				// we're at the end of the entry array, either from the above loop, or because index was already None
+				if !self.next_entry_array().await? {
+					// we're at the end, stop looping
+					break;
+				}
+			}
+		})
 	}
 
 	/// Verify all data in all available journals.
@@ -199,45 +249,58 @@ where
 		Ok(())
 	}
 
-	/// Follow the chain of primary entry arrays until the last, and set position.
+	/// load() only if needed.
 	///
-	/// load() must have been called first.
-	async fn skip_to_end(&mut self) -> std::io::Result<()> {
-		let Some(current) = &mut self.current else {
-			return Err(std::io::Error::new(
-				std::io::ErrorKind::NotConnected,
-				"no journal loaded",
-			));
-		};
-
-		loop {
-			let object =
-				ObjectHeader::read_at(&mut self.io, current.position.entry_array_offset.get())
-					.await?;
-			if object.r#type != ObjectType::EntryArray {
-				return Err(std::io::Error::new(
-					std::io::ErrorKind::InvalidData,
-					format!(
-						"expected object of type {:?}, found {:?}",
-						ObjectType::EntryArray,
-						object.r#type
-					),
-				));
-			}
-
-			let entry_array = EntryArrayObjectHeader::read_at(
-				&mut self.io,
-				current.position.entry_array_offset.get() + OBJECT_HEADER_SIZE as u64,
-			)
-			.await?;
-			match entry_array.next_entry_array_offset {
-				None => break,
-				Some(next) => {
-					current.position.entry_array_offset = next;
-					current.position.index = None;
-				}
-			}
+	/// You can unwrap self.current after calling this.
+	async fn load_if_needed(&mut self) -> std::io::Result<()> {
+		if self.current.is_none() {
+			self.load().await?;
 		}
+
+		Ok(())
+	}
+
+	/// Jump to the next entry array, at index 0.
+	///
+	/// If we're already at the end, does nothing and returns false.
+	async fn next_entry_array(&mut self) -> std::io::Result<bool> {
+		self.load_if_needed().await?;
+		let current = self.current.as_mut().unwrap();
+
+		// just checking that we're in the right place
+		let object =
+			ObjectHeader::read_at(&mut self.io, current.position.entry_array_offset.get()).await?;
+		if object.r#type != ObjectType::EntryArray {
+			return Err(std::io::Error::new(
+				std::io::ErrorKind::InvalidData,
+				format!(
+					"expected object of type {:?}, found {:?}",
+					ObjectType::EntryArray,
+					object.r#type
+				),
+			));
+		}
+
+		let entry_array = EntryArrayObjectHeader::read_at(
+			&mut self.io,
+			current.position.entry_array_offset.get() + OBJECT_HEADER_SIZE as u64,
+		)
+		.await?;
+		if let Some(next) = entry_array.next_entry_array_offset {
+			current.position.entry_array_offset = next;
+			current.position.index = Some(0);
+			Ok(true)
+		} else {
+			Ok(false)
+		}
+	}
+
+	/// Follow the chain of primary entry arrays until the last, and set position.
+	async fn skip_to_end(&mut self) -> std::io::Result<()> {
+		while self.next_entry_array().await? {}
+
+		// UNWRAP: next_entry_array() depends on current being Some()
+		self.current.as_mut().unwrap().position.index = None;
 
 		Ok(())
 	}
