@@ -5,6 +5,10 @@ use flagset::{flags, FlagSet};
 use jiff::Timestamp;
 
 use crate::{
+	objects::{
+		EntryArrayCompactItem, EntryArrayRegularItem, EntryObjectCompactItem,
+		EntryObjectRegularItem,
+	},
 	reader::{AsyncFileRead, FilenameInfo},
 	tables::HashTable,
 };
@@ -264,6 +268,29 @@ impl Header {
 	pub fn field_fill_level(&self) -> Option<f64> {
 		self.n_fields
 			.map(|n| n as f64 / self.field_hash_table().capacity() as f64)
+	}
+
+	/// Whether this journal file uses the compact layout.
+	pub fn is_compact(&self) -> bool {
+		self.incompatible_flags.contains(IncompatibleFlag::Compact)
+	}
+
+	/// The size of Entry's items.
+	pub fn sizeof_entry_object_item(&self) -> u64 {
+		if self.is_compact() {
+			std::mem::size_of::<EntryObjectCompactItem>() as u64
+		} else {
+			std::mem::size_of::<EntryObjectRegularItem>() as u64
+		}
+	}
+
+	/// The size of EntryArray's items.
+	pub fn sizeof_entry_array_item(&self) -> u64 {
+		if self.is_compact() {
+			std::mem::size_of::<EntryArrayCompactItem>() as u64
+		} else {
+			std::mem::size_of::<EntryArrayRegularItem>() as u64
+		}
 	}
 }
 
