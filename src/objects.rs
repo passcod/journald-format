@@ -8,6 +8,7 @@ use deku::prelude::*;
 use crate::{header::Header, reader::AsyncFileRead};
 
 pub(crate) trait SimpleRead: for<'a> DekuContainerRead<'a> {
+	#[tracing::instrument(level = "trace", skip(io))]
 	async fn read<R: AsyncFileRead + Unpin>(io: &mut R) -> std::io::Result<Self>
 	where
 		Self: Sized,
@@ -18,6 +19,7 @@ pub(crate) trait SimpleRead: for<'a> DekuContainerRead<'a> {
 			.map(|(_, d)| d)
 	}
 
+	#[tracing::instrument(level = "trace", skip(io))]
 	async fn read_at<R: AsyncFileRead + Unpin>(io: &mut R, offset: u64) -> std::io::Result<Self>
 	where
 		Self: Sized,
@@ -166,6 +168,7 @@ pub struct Entry {
 }
 
 impl Entry {
+	#[tracing::instrument(level = "trace", skip(io, file_header))]
 	pub(crate) async fn read_at<R: AsyncFileRead + Unpin>(
 		io: &mut R,
 		offset: u64,

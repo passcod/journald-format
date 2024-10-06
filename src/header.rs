@@ -221,7 +221,9 @@ impl From<Header> for FilenameInfo {
 }
 
 impl Header {
+	#[tracing::instrument(level = "trace", skip(io))]
 	pub async fn read<R: AsyncFileRead + Unpin>(io: &mut R) -> std::io::Result<Self> {
+		io.seek(std::io::SeekFrom::Start(0)).await?;
 		let head = io.read_bounded(MIN_HEADER_SIZE, MAX_HEADER_SIZE).await?;
 
 		let (_, header) = Header::from_bytes((&head, 0))
@@ -231,6 +233,7 @@ impl Header {
 	}
 
 	/// Get the data hash table.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub fn data_hash_table<'h>(&'h self) -> HashTable<'h> {
 		HashTable {
 			offset: self.data_hash_table_offset,
@@ -240,6 +243,7 @@ impl Header {
 	}
 
 	/// Get the field hash table.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub fn field_hash_table<'h>(&'h self) -> HashTable<'h> {
 		HashTable {
 			offset: self.field_hash_table_offset,
@@ -254,6 +258,7 @@ impl Header {
 	/// prefer to use [`HashTable::fill_level`](crate::tables::HashTable::fill_level) instead.
 	///
 	/// Returns None if the journal was created before systemd 187.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub fn data_fill_level(&self) -> Option<f64> {
 		self.n_data
 			.map(|n| n as f64 / self.data_hash_table().capacity() as f64)
@@ -265,17 +270,20 @@ impl Header {
 	/// prefer to use [`HashTable::fill_level`](crate::tables::HashTable::fill_level) instead.
 	///
 	/// Returns None if the journal was created before systemd 187.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub fn field_fill_level(&self) -> Option<f64> {
 		self.n_fields
 			.map(|n| n as f64 / self.field_hash_table().capacity() as f64)
 	}
 
 	/// Whether this journal file uses the compact layout.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub fn is_compact(&self) -> bool {
 		self.incompatible_flags.contains(IncompatibleFlag::Compact)
 	}
 
 	/// The size of Entry's items.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub fn sizeof_entry_object_item(&self) -> u64 {
 		if self.is_compact() {
 			std::mem::size_of::<EntryObjectCompactItem>() as u64
@@ -285,6 +293,7 @@ impl Header {
 	}
 
 	/// The size of EntryArray's items.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub fn sizeof_entry_array_item(&self) -> u64 {
 		if self.is_compact() {
 			std::mem::size_of::<EntryArrayCompactItem>() as u64

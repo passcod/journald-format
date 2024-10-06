@@ -60,6 +60,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// This is a convenience method that calls [`list_files`](AsyncFileRead::list_files) and sorts the results.
 	///
 	/// You may want to override this method if you have a more efficient way to list files in sorted order.
+	#[tracing::instrument(level = "trace", skip(self))]
 	fn list_files_sorted(
 		&self,
 		prefix: Option<&Path>,
@@ -91,6 +92,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	///
 	/// This MUST be the inverse of [`parse_filename`](AsyncFileRead::parse_filename), and you should ensure that
 	/// [`make_prefix`](AsyncFileRead::make_prefix) remains compatible.
+	#[tracing::instrument(level = "trace")]
 	fn make_filename(info: FilenameInfo) -> PathBuf {
 		match info {
 			FilenameInfo::Latest { machine_id, scope } => {
@@ -127,6 +129,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// where `(machine_id)` is lowercase hex-encoded in little-endian.
 	///
 	/// This MUST be compatible with [`make_filename`](AsyncFileRead::parse_filename).
+	#[tracing::instrument(level = "trace")]
 	fn make_prefix(JournalSelection { machine_id, scope }: &JournalSelection) -> PathBuf {
 		PathBuf::from(hex::encode(machine_id.to_le_bytes())).join(format!("{scope}@"))
 	}
@@ -148,6 +151,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// This MUST be the inverse of [`make_filename`](AsyncFileRead::make_filename), though it may be more lenient.
 	/// The default implementation ignores the extension (or even the presence of a file extension), and is
 	/// case-insensitive on the hex fields.
+	#[tracing::instrument(level = "trace")]
 	fn parse_filename(path: &Path) -> Option<FilenameInfo> {
 		let mut components = path.components().rev();
 		let filename = components.next()?.as_os_str().to_str()?;
@@ -187,6 +191,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	#[allow(async_fn_in_trait)]
 	#[doc(hidden)]
 	#[must_use]
+	#[tracing::instrument(level = "trace", skip(self))]
 	async fn read_some(&mut self, size: usize) -> std::io::Result<Vec<u8>>
 	where
 		Self: Unpin,
@@ -200,6 +205,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	#[allow(async_fn_in_trait)]
 	#[doc(hidden)]
 	#[must_use]
+	#[tracing::instrument(level = "trace", skip(self))]
 	async fn read_some_at(&mut self, offset: u64, size: usize) -> std::io::Result<Vec<u8>>
 	where
 		Self: Unpin,
@@ -247,6 +253,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	#[allow(async_fn_in_trait)]
 	#[doc(hidden)]
 	#[must_use]
+	#[tracing::instrument(level = "trace", skip(self))]
 	async fn read_bounded(&mut self, min: usize, max: usize) -> std::io::Result<Vec<u8>>
 	where
 		Self: Unpin,

@@ -29,6 +29,7 @@ impl JournalOnDisk {
 }
 
 impl AsyncFileRead for JournalOnDisk {
+	#[tracing::instrument(level = "trace", skip(self))]
 	fn open(
 		&mut self,
 		filename: &Path,
@@ -41,12 +42,14 @@ impl AsyncFileRead for JournalOnDisk {
 		}
 	}
 
+	#[tracing::instrument(level = "trace", skip(self))]
 	fn close(&mut self) -> impl std::future::Future<Output = ()> + Send {
 		async move {
 			self.open = None;
 		}
 	}
 
+	#[tracing::instrument(level = "trace", skip(self))]
 	fn current(&self) -> Option<&Path> {
 		self.open.as_ref().map(|file| file.path.as_ref())
 	}
@@ -112,6 +115,7 @@ impl AsyncSeek for JournalOnDisk {
 }
 
 impl AsyncRead for JournalOnDisk {
+	#[tracing::instrument(level = "trace", skip(self, cx, buf))]
 	fn poll_read(
 		mut self: Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,

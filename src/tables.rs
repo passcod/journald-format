@@ -28,11 +28,13 @@ pub struct HashTable<'h> {
 
 impl<'h> HashTable<'h> {
 	/// Number of item slots in the hash table.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub fn capacity(&self) -> u64 {
 		self.size.get() / HASH_ITEM_SIZE as u64
 	}
 
 	/// Iterate over all items in the hash table.
+	#[tracing::instrument(level = "trace", skip(self, io))]
 	pub fn items<'io: 'h, R: AsyncFileRead + Unpin>(
 		&'h self,
 		io: &'io mut R,
@@ -52,6 +54,7 @@ impl<'h> HashTable<'h> {
 	/// Count the number of items in the hash table.
 	///
 	/// This is computed by reading the entire hash table, and ignores errors.
+	#[tracing::instrument(level = "trace", skip(self, io))]
 	pub async fn count<R: AsyncFileRead + Unpin>(&self, io: &mut R) -> u64 {
 		let stream = self.items(io);
 		stream.count().await as _
@@ -62,6 +65,7 @@ impl<'h> HashTable<'h> {
 	/// This is computed by reading the entire hash table, for performance prefer to use
 	/// [`Header::data_fill_level`](crate::header::Header::data_fill_level) or
 	/// [`Header::field_fill_level`](crate::header::Header::field_fill_level) instead.
+	#[tracing::instrument(level = "trace", skip(self, io))]
 	pub async fn fill_level<R: AsyncFileRead + Unpin>(&self, io: &mut R) -> f64 {
 		self.count(io).await as f64 / self.capacity() as f64
 	}

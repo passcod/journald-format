@@ -90,6 +90,7 @@ where
 	}
 
 	/// List all available journals (machine ID, scope).
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub async fn list(&self) -> std::io::Result<HashSet<JournalSelection>> {
 		let mut set = HashSet::new();
 		let mut files = self.io.list_files(None);
@@ -104,6 +105,7 @@ where
 	}
 
 	/// Get the current journal selection.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub fn selection(&self) -> Option<&JournalSelection> {
 		self.select.as_ref()
 	}
@@ -114,6 +116,7 @@ where
 	/// current journal.
 	///
 	/// This invalidates the current position.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub async fn select(&mut self, journal: JournalSelection) -> std::io::Result<()> {
 		self.io.close().await;
 		self.select = None;
@@ -148,6 +151,7 @@ where
 	}
 
 	/// Seek to a position in the journal.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub async fn seek(&mut self, seek: Seek) -> std::io::Result<()> {
 		let (selected, prefix) = self.selected_journal()?;
 
@@ -186,6 +190,7 @@ where
 	/// If there's nothing to read, return an empty stream.
 	///
 	/// Updates the [`Position`] of the reader as it goes.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub fn entries(&mut self) -> impl Stream<Item = std::io::Result<Entry>> + Unpin + '_ {
 		Box::pin(async_stream::try_stream! {
 			self.load_if_needed().await?;
@@ -220,6 +225,7 @@ where
 	/// This will check every hash, every sealing tag, and every entry. It
 	/// should be used to detect tampering; when reading the journal normally,
 	/// only the data that is actually read is verified.
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub async fn verify_all(&mut self) -> std::io::Result<bool> {
 		todo!()
 	}
@@ -227,6 +233,7 @@ where
 	// == Internal ==
 
 	/// Get the selected journal and its prefix, failing if no journal is selected.
+	#[tracing::instrument(level = "trace", skip(self))]
 	fn selected_journal(&self) -> std::io::Result<(&JournalSelection, PathBuf)> {
 		self.select
 			.as_ref()
@@ -239,6 +246,7 @@ where
 	/// Load the header and base structures of the current open file into memory.
 	///
 	/// Also set the position to the first entry.
+	#[tracing::instrument(level = "trace", skip(self))]
 	async fn load(&mut self) -> std::io::Result<()> {
 		let header = Header::read(&mut self.io).await?;
 		let position = Position {
@@ -252,6 +260,7 @@ where
 	/// load() only if needed.
 	///
 	/// You can unwrap self.current after calling this.
+	#[tracing::instrument(level = "trace", skip(self))]
 	async fn load_if_needed(&mut self) -> std::io::Result<()> {
 		if self.current.is_none() {
 			self.load().await?;
@@ -263,6 +272,7 @@ where
 	/// Jump to the next entry array, at index 0.
 	///
 	/// If we're already at the end, does nothing and returns false.
+	#[tracing::instrument(level = "trace", skip(self))]
 	async fn next_entry_array(&mut self) -> std::io::Result<bool> {
 		self.load_if_needed().await?;
 		let current = self.current.as_mut().unwrap();
@@ -296,6 +306,7 @@ where
 	}
 
 	/// Follow the chain of primary entry arrays until the last, and set position.
+	#[tracing::instrument(level = "trace", skip(self))]
 	async fn skip_to_end(&mut self) -> std::io::Result<()> {
 		while self.next_entry_array().await? {}
 
