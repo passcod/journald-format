@@ -104,7 +104,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	fn make_filename(info: FilenameInfo) -> PathBuf {
 		match info {
 			FilenameInfo::Latest { machine_id, scope } => {
-				PathBuf::from(hex::encode(machine_id.to_le_bytes()))
+				PathBuf::from(hex::encode(machine_id.to_be_bytes()))
 					.join(format!("{scope}.journal"))
 			}
 			FilenameInfo::Archived {
@@ -113,14 +113,14 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 				file_seqnum,
 				head_seqnum,
 				head_realtime,
-			} => PathBuf::from(hex::encode(machine_id.to_le_bytes())).join(format!(
+			} => PathBuf::from(hex::encode(machine_id.to_be_bytes())).join(format!(
 				"{scope}@{file_seqnum}-{head_seqnum}-{head_realtime}.journal",
-				file_seqnum = hex::encode(file_seqnum.get().to_le_bytes()),
-				head_seqnum = hex::encode(head_seqnum.get().to_le_bytes()),
+				file_seqnum = hex::encode(file_seqnum.get().to_be_bytes()),
+				head_seqnum = hex::encode(head_seqnum.get().to_be_bytes()),
 				head_realtime = hex::encode(
 					u64::try_from(head_realtime.as_microsecond())
 						.unwrap_or_default()
-						.to_le_bytes()
+						.to_be_bytes()
 				),
 			)),
 		}
@@ -139,7 +139,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// This MUST be compatible with [`make_filename`](AsyncFileRead::parse_filename).
 	#[tracing::instrument(level = "trace")]
 	fn make_prefix(JournalSelection { machine_id, scope }: &JournalSelection) -> PathBuf {
-		PathBuf::from(hex::encode(machine_id.to_le_bytes())).join(format!("{scope}@"))
+		PathBuf::from(hex::encode(machine_id.to_be_bytes())).join(format!("{scope}@"))
 	}
 
 	/// Parse a journal filename.
@@ -163,7 +163,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	fn parse_filename(path: &Path) -> Option<FilenameInfo> {
 		let mut components = path.components().rev();
 		let filename = components.next()?.as_os_str().to_str()?;
-		let machine_id = u128::from_le_bytes(
+		let machine_id = u128::from_be_bytes(
 			hex::decode(components.next()?.as_os_str().to_str()?)
 				.ok()?
 				.try_into()
@@ -182,9 +182,9 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 		let (head_seqnum, rest) = rest.split_once('-')?;
 		let (head_realtime, _) = rest.split_once('.').unwrap_or((rest, ""));
 
-		let file_seqnum = u128::from_le_bytes(hex::decode(file_seqnum).ok()?.try_into().ok()?);
-		let head_seqnum = u64::from_le_bytes(hex::decode(head_seqnum).ok()?.try_into().ok()?);
-		let head_realtime = u64::from_le_bytes(hex::decode(head_realtime).ok()?.try_into().ok()?);
+		let file_seqnum = u128::from_be_bytes(hex::decode(file_seqnum).ok()?.try_into().ok()?);
+		let head_seqnum = u64::from_be_bytes(hex::decode(head_seqnum).ok()?.try_into().ok()?);
+		let head_realtime = u64::from_be_bytes(hex::decode(head_realtime).ok()?.try_into().ok()?);
 
 		Some(FilenameInfo::Archived {
 			machine_id,

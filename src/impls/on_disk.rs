@@ -147,3 +147,76 @@ impl AsyncRead for JournalOnDisk {
 		)
 	}
 }
+
+#[test]
+fn test_parse_filename_latest() {
+	assert_eq!(
+		JournalOnDisk::parse_filename(Path::new(
+			"/var/log/journal/c444c71c038d45b0af201444a83b91c9/system.journal"
+		)),
+		Some(FilenameInfo::Latest {
+			machine_id: 0xc444c71c038d45b0af201444a83b91c9,
+			scope: "system".into()
+		})
+	);
+}
+
+#[test]
+fn test_parse_filename_archived() {
+	use jiff::Timestamp;
+	use std::num::{NonZeroU128, NonZeroU64};
+
+	assert_eq!(
+		JournalOnDisk::parse_filename(Path::new(
+			"/var/log/journal/c444c71c038d45b0af201444a83b91c9/system@ae257a224b70405a9042a99aef057ce0-00000000002d5994-00062368053e1184.journal"
+		)),
+		Some(FilenameInfo::Archived {
+			machine_id: 0xc444c71c038d45b0af201444a83b91c9,
+			scope: "system".into(),
+			file_seqnum: NonZeroU128::new(0xae257a224b70405a9042a99aef057ce0).unwrap(),
+			head_seqnum: NonZeroU64::new(0x00000000002d5994).unwrap(),
+			head_realtime: Timestamp::from_microsecond(0x00062368053e1184).unwrap()
+		})
+	);
+}
+
+#[test]
+fn test_make_filename_latest() {
+	assert_eq!(
+		JournalOnDisk::make_filename(FilenameInfo::Latest {
+			machine_id: 0xc444c71c038d45b0af201444a83b91c9,
+			scope: "system".into()
+		}),
+		PathBuf::from("c444c71c038d45b0af201444a83b91c9/system.journal"),
+	);
+}
+
+#[test]
+fn test_make_filename_archived() {
+	use jiff::Timestamp;
+	use std::num::{NonZeroU128, NonZeroU64};
+
+	assert_eq!(
+		JournalOnDisk::make_filename(FilenameInfo::Archived {
+			machine_id: 0xc444c71c038d45b0af201444a83b91c9,
+			scope: "system".into(),
+			file_seqnum: NonZeroU128::new(0xae257a224b70405a9042a99aef057ce0).unwrap(),
+			head_seqnum: NonZeroU64::new(0x00000000002d5994).unwrap(),
+			head_realtime: Timestamp::from_microsecond(0x00062368053e1184).unwrap()
+		}),
+		PathBuf::from(
+			"c444c71c038d45b0af201444a83b91c9/system@ae257a224b70405a9042a99aef057ce0-00000000002d5994-00062368053e1184.journal"
+		),
+	);
+}
+
+#[test]
+fn test_make_prefix() {
+	assert_eq!(
+		JournalOnDisk::make_prefix(&crate::reader::JournalSelection {
+			machine_id: 0xc444c71c038d45b0af201444a83b91c9,
+			scope: "system".into()
+		}),
+		PathBuf::from("c444c71c038d45b0af201444a83b91c9/system@"),
+	);
+}
