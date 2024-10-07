@@ -220,7 +220,10 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	where
 		Self: Unpin,
 	{
-		debug_assert!(offset >= MIN_HEADER_SIZE as u64, "small seek protection! [{offset}]");
+		debug_assert!(
+			offset >= MIN_HEADER_SIZE as u64,
+			"small seek protection! [{offset}]"
+		);
 
 		let mut buf = vec![0; size];
 		self.seek(std::io::SeekFrom::Start(offset)).await?;

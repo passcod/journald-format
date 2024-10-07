@@ -5,7 +5,10 @@ use std::{
 
 use deku::prelude::*;
 
-use crate::{header::{Header, MIN_HEADER_SIZE}, reader::AsyncFileRead};
+use crate::{
+	header::{Header, MIN_HEADER_SIZE},
+	reader::AsyncFileRead,
+};
 
 pub(crate) trait SimpleRead: for<'a> DekuContainerRead<'a> {
 	#[tracing::instrument(level = "trace", skip(io))]
@@ -24,7 +27,10 @@ pub(crate) trait SimpleRead: for<'a> DekuContainerRead<'a> {
 	where
 		Self: Sized,
 	{
-		debug_assert!(offset >= MIN_HEADER_SIZE as u64, "small seek protection! ({offset})");
+		debug_assert!(
+			offset >= MIN_HEADER_SIZE as u64,
+			"small seek protection! ({offset})"
+		);
 		io.seek(SeekFrom::Start(offset)).await?;
 		Self::read(io).await
 	}
@@ -112,6 +118,17 @@ impl ObjectHeader {
 	pub const fn payload_size(&self) -> u64 {
 		self.size.saturating_sub(OBJECT_HEADER_SIZE as _)
 	}
+
+	pub fn check_type(self, check: ObjectType) -> std::io::Result<Self> {
+		if self.r#type != check {
+			Err(std::io::Error::new(
+				std::io::ErrorKind::InvalidData,
+				format!("expected object of type {check:?}, found {:?}", self.r#type),
+			))
+		} else {
+			Ok(self)
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
@@ -189,14 +206,21 @@ impl Entry {
 	where
 		Self: Sized,
 	{
-		let object = ObjectHeader::read_at(io, offset).await?;
+		tracing::trace!(?offset, "reading object header");
+		let object = ObjectHeader::read_at(io, offset)
+			.await?
+			.check_type(ObjectType::Entry)?;
+		tracing::trace!(?object, "read object header");
 
+		tracing::trace!(?offset, "reading entry header");
 		let header_offset = offset + OBJECT_HEADER_SIZE as u64;
 		let header = EntryObjectHeader::read_at(io, header_offset).await?;
+		tracing::trace!(?header, "read entry header");
 
 		let array_offset = header_offset + ENTRY_OBJECT_HEADER_SIZE as u64;
 		let size = file_header.sizeof_entry_object_item();
 		let capacity = object.payload_size() / size;
+		tracing::trace!(?size, ?capacity, payload_size=?object.payload_size(), "initialising object vec");
 		let mut objects = Vec::with_capacity(capacity as _);
 		for n in 0..capacity {
 			let object_offset = if file_header.is_compact() {

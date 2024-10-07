@@ -6,8 +6,8 @@ use futures_util::{Stream, StreamExt as _};
 use crate::{
 	header::Header,
 	objects::{
-		Entry, EntryArrayObjectHeader, ObjectHeader, ObjectType, SimpleRead,
-		ENTRY_ARRAY_HEADER_SIZE, OBJECT_HEADER_SIZE,
+		Entry, EntryArrayCompactItem, EntryArrayObjectHeader, EntryArrayRegularItem, ObjectHeader,
+		ObjectType, SimpleRead, ENTRY_ARRAY_HEADER_SIZE, OBJECT_HEADER_SIZE,
 	},
 };
 
@@ -194,7 +194,9 @@ where
 
 			loop {
 				let current = self.current.as_mut().unwrap();
-				let array_object = ObjectHeader::read_at(&mut self.io, current.position.entry_array_offset.get()).await?;
+				let array_object = ObjectHeader::read_at(&mut self.io, current.position.entry_array_offset.get())
+					.await?
+					.check_type(ObjectType::EntryArray)?;
 
 				while let Some((entry_index, entry_offset)) = current.entry_index_and_offset() {
 					yield Entry::read_at(&mut self.io, entry_offset, &current.header).await?;
@@ -275,18 +277,9 @@ where
 		let current = self.current.as_mut().unwrap();
 
 		// just checking that we're in the right place
-		let object =
-			ObjectHeader::read_at(&mut self.io, current.position.entry_array_offset.get()).await?;
-		if object.r#type != ObjectType::EntryArray {
-			return Err(std::io::Error::new(
-				std::io::ErrorKind::InvalidData,
-				format!(
-					"expected object of type {:?}, found {:?}",
-					ObjectType::EntryArray,
-					object.r#type
-				),
-			));
-		}
+		ObjectHeader::read_at(&mut self.io, current.position.entry_array_offset.get())
+			.await?
+			.check_type(ObjectType::EntryArray)?;
 
 		let entry_array = EntryArrayObjectHeader::read_at(
 			&mut self.io,

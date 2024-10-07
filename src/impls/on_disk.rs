@@ -121,7 +121,6 @@ impl AsyncSeek for JournalOnDisk {
 }
 
 impl AsyncRead for JournalOnDisk {
-	#[tracing::instrument(level = "trace", skip(self, cx, buf))]
 	fn poll_read(
 		mut self: Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
