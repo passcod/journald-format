@@ -35,32 +35,39 @@ pub(crate) trait SimpleRead: for<'a> DekuContainerRead<'a> {
 pub enum ObjectType {
 	/// Encapsulates the contents of one field of an entry, i.e. a string such
 	/// as `_SYSTEMD_UNIT=avahi-daemon.service`, or `MESSAGE=Foo had a booboo`.
-	Data = 1,
+	#[deku(id = "1")]
+	Data,
 
 	/// Encapsulates a field name, i.e. a string such as `_SYSTEMD_UNIT` or
 	/// `MESSAGE`, without any `=` or even value.
+	#[deku(id = "2")]
 	Field,
 
 	/// Binds several `Data` objects together into a log entry.
+	#[deku(id = "3")]
 	Entry,
 
 	/// Encapsulates a hash table for finding existing `Data` objects.
+	#[deku(id = "4")]
 	DataHashTable,
 
 	/// Encapsulates a hash table for finding existing `Field` objects.
+	#[deku(id = "5")]
 	FieldHashTable,
 
 	/// Encapsulates a sorted array of offsets to entries, used for seeking by
 	/// binary search.
+	#[deku(id = "6")]
 	EntryArray,
 
 	/// Consists of a Forward Secure Sealing tag for all data from the beginning
 	/// of the file or the last tag written (whichever is later).
+	#[deku(id = "7")]
 	Tag,
 
 	/// Unknown objects are skipped.
 	#[deku(id_pat = "_")]
-	Unknown,
+	Unknown(u8),
 }
 
 /// Compression algorithm used for a Data object.
