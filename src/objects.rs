@@ -5,7 +5,7 @@ use std::{
 
 use deku::prelude::*;
 
-use crate::{header::Header, reader::AsyncFileRead};
+use crate::{header::{Header, MIN_HEADER_SIZE}, reader::AsyncFileRead};
 
 pub(crate) trait SimpleRead: for<'a> DekuContainerRead<'a> {
 	#[tracing::instrument(level = "trace", skip(io))]
@@ -24,6 +24,7 @@ pub(crate) trait SimpleRead: for<'a> DekuContainerRead<'a> {
 	where
 		Self: Sized,
 	{
+		debug_assert!(offset >= MIN_HEADER_SIZE as u64, "small seek protection! ({offset})");
 		io.seek(SeekFrom::Start(offset)).await?;
 		Self::read(io).await
 	}

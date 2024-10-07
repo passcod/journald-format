@@ -196,8 +196,8 @@ pub struct Header {
 	pub tail_entry_offset: Option<NonZeroU64>, // 8 = 272
 }
 
-const MIN_HEADER_SIZE: usize = 208;
-const MAX_HEADER_SIZE: usize = 272;
+pub const MIN_HEADER_SIZE: usize = 208;
+pub const MAX_HEADER_SIZE: usize = 272;
 
 impl From<Header> for FilenameInfo {
 	fn from(value: Header) -> Self {

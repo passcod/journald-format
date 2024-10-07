@@ -10,6 +10,8 @@ use futures_util::{
 };
 use jiff::Timestamp;
 
+use crate::header::MIN_HEADER_SIZE;
+
 use super::JournalSelection;
 
 pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
@@ -218,6 +220,8 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	where
 		Self: Unpin,
 	{
+		debug_assert!(offset >= MIN_HEADER_SIZE as u64, "small seek protection! [{offset}]");
+
 		let mut buf = vec![0; size];
 		self.seek(std::io::SeekFrom::Start(offset)).await?;
 		self.read_exact(&mut buf).await?;
