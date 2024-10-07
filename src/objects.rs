@@ -269,11 +269,15 @@ pub struct EntryArrayRegularItem {
 	pub offset: u64,
 }
 
+impl SimpleRead for EntryArrayRegularItem {}
+
 #[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryArrayCompactItem {
 	pub offset: u32,
 }
+
+impl SimpleRead for EntryArrayCompactItem {}
 
 pub const TAG_LENGTH: usize = 256 / 8;
 

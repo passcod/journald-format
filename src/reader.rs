@@ -46,18 +46,24 @@ struct Position {
 }
 
 impl CurrentFile {
-	/// Get the offset of the current entry.
+	/// Get the offset of the current item in the current entry array.
 	///
 	/// None if position.index is None
+	#[tracing::instrument(level = "trace", skip(self))]
 	fn entry_index_and_offset(&self) -> Option<(u64, u64)> {
-		self.position.index.map(|index| {
-			(
-				index,
-				self.position.entry_array_offset.get()
-					+ ENTRY_ARRAY_HEADER_SIZE as u64
-					+ index * self.header.sizeof_entry_array_item(),
-			)
-		})
+		tracing::trace!(?self.position, "position");
+		self.position
+			.index
+			.map(|index| {
+				(
+					index,
+					self.position.entry_array_offset.get()
+						+ OBJECT_HEADER_SIZE as u64
+						+ ENTRY_ARRAY_HEADER_SIZE as u64
+						+ index * self.header.sizeof_entry_array_item(),
+				)
+			})
+			.inspect(|(_, offset)| tracing::trace!(?offset, "calculated entry array item offset"))
 	}
 }
 
@@ -198,12 +204,27 @@ where
 					.await?
 					.check_type(ObjectType::EntryArray)?;
 
-				while let Some((entry_index, entry_offset)) = current.entry_index_and_offset() {
+				while let Some((entry_index, array_offset)) = current.entry_index_and_offset() {
+					let entry_offset = if current.header.is_compact() {
+						u64::from(EntryArrayCompactItem::read_at(&mut self.io, array_offset).await?.offset)
+					} else {
+						EntryArrayRegularItem::read_at(&mut self.io, array_offset).await?.offset
+					};
+					tracing::trace!(?entry_offset, "got entry offset");
+					if entry_offset == 0 {
+						tracing::trace!("bumping to next entry array (zero)");
+						// we're at the end of the entry array
+						current.position.index = None;
+						break;
+					}
+
 					yield Entry::read_at(&mut self.io, entry_offset, &current.header).await?;
 					if entry_index * current.header.sizeof_entry_array_item() < array_object.payload_size() {
+						tracing::trace!("bumping to next array entry");
 						*(current.position.index.as_mut().unwrap()) += 1;
 						continue;
 					} else {
+						tracing::trace!("bumping to next entry array (bounds)");
 						// we're at the end of the entry array
 						current.position.index = None;
 						break;
