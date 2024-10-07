@@ -204,6 +204,10 @@ where
 					.await?
 					.check_type(ObjectType::EntryArray)?;
 
+				let payload_size = array_object.payload_size() - ENTRY_ARRAY_HEADER_SIZE as u64;
+				let array_size = payload_size / current.header.sizeof_entry_array_item();
+				tracing::trace!(?payload_size, ?array_size, "entry array calculations");
+
 				while let Some((entry_index, array_offset)) = current.entry_index_and_offset() {
 					let entry_offset = if current.header.is_compact() {
 						u64::from(EntryArrayCompactItem::read_at(&mut self.io, array_offset).await?.offset)
@@ -219,12 +223,12 @@ where
 					}
 
 					yield Entry::read_at(&mut self.io, entry_offset, &current.header).await?;
-					if entry_index * current.header.sizeof_entry_array_item() < array_object.payload_size() {
-						tracing::trace!("bumping to next array entry");
+					if entry_index + 1 < array_size {
+						tracing::trace!(?entry_index, ?array_size, "bumping to next array entry");
 						*(current.position.index.as_mut().unwrap()) += 1;
 						continue;
 					} else {
-						tracing::trace!("bumping to next entry array (bounds)");
+						tracing::trace!(?entry_index, ?array_size, "bumping to next entry array (bounds)");
 						// we're at the end of the entry array
 						current.position.index = None;
 						break;
