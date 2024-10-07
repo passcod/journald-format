@@ -218,9 +218,17 @@ impl Entry {
 		tracing::trace!(?header, "read entry header");
 
 		let array_offset = header_offset + ENTRY_OBJECT_HEADER_SIZE as u64;
+		let array_size = object.payload_size() - ENTRY_OBJECT_HEADER_SIZE as u64;
+
 		let size = file_header.sizeof_entry_object_item();
-		let capacity = object.payload_size() / size;
-		tracing::trace!(?size, ?capacity, payload_size=?object.payload_size(), "initialising object vec");
+		let capacity = array_size / size;
+		tracing::trace!(
+			?size,
+			?capacity,
+			?array_offset,
+			?array_size,
+			"initialising object vec"
+		);
 		let mut objects = Vec::with_capacity(capacity as _);
 		for n in 0..capacity {
 			let object_offset = if file_header.is_compact() {
