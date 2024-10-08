@@ -263,6 +263,7 @@ impl Entry {
 #[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
 pub struct EntryArrayObjectHeader {
+	#[deku(map = "|field: u64| -> Result<_, DekuError> { Ok(NonZeroU64::new(field)) }")]
 	pub next_entry_array_offset: Option<NonZeroU64>,
 }
 
