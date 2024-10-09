@@ -103,7 +103,7 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// This MUST be the inverse of [`parse_filename`](AsyncFileRead::parse_filename), and you should ensure that
 	/// [`make_prefix`](AsyncFileRead::make_prefix) remains compatible.
 	#[tracing::instrument(level = "trace")]
-	fn make_filename(info: FilenameInfo) -> PathBuf {
+	fn make_filename(info: &FilenameInfo) -> PathBuf {
 		match info {
 			FilenameInfo::Latest { machine_id, scope } => {
 				PathBuf::from(hex::encode(machine_id.to_be_bytes()))
@@ -294,6 +294,22 @@ pub enum FilenameInfo {
 		machine_id: u128,
 		scope: String,
 	},
+}
+
+impl FilenameInfo {
+	pub fn is_archived(&self) -> bool {
+		match self {
+			Self::Archived { .. } => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_latest(&self) -> bool {
+		match self {
+			Self::Latest { .. } => true,
+			_ => false,
+		}
+	}
 }
 
 impl PartialOrd for FilenameInfo {

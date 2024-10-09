@@ -1,4 +1,8 @@
-use std::{collections::HashSet, num::NonZeroU64, path::PathBuf};
+use std::{
+	collections::{BTreeSet, HashSet},
+	num::NonZeroU64,
+	path::PathBuf,
+};
 
 pub use file_read::{AsyncFileRead, FilenameInfo};
 use futures_util::{Stream, StreamExt as _};
@@ -125,7 +129,7 @@ where
 		self.select = None;
 		self.current = None;
 
-		let latest = T::make_filename(FilenameInfo::Latest {
+		let latest = T::make_filename(&FilenameInfo::Latest {
 			machine_id: journal.machine_id,
 			scope: journal.scope.clone(),
 		});
@@ -146,7 +150,7 @@ where
 				};
 				file?
 			};
-			self.io.open(&T::make_filename(file)).await?;
+			self.io.open(&T::make_filename(&file)).await?;
 		}
 
 		self.select = Some(journal);
@@ -168,12 +172,12 @@ where
 					.ok_or_else(|| {
 						std::io::Error::new(std::io::ErrorKind::NotFound, "no files found")
 					})??;
-				self.io.open(&T::make_filename(oldest)).await?;
+				self.io.open(&T::make_filename(&oldest)).await?;
 				self.load().await?;
 				Ok(())
 			}
 			Seek::Newest => {
-				let latest = T::make_filename(FilenameInfo::Latest {
+				let latest = T::make_filename(&FilenameInfo::Latest {
 					machine_id: selected.machine_id,
 					scope: selected.scope.clone(),
 				});
@@ -193,51 +197,85 @@ where
 	/// If there's nothing to read, return an empty stream.
 	///
 	/// Updates the [`Position`] of the reader as it goes.
-	#[tracing::instrument(level = "trace", skip(self))]
+	#[tracing::instrument(level = "debug", skip(self))]
 	pub fn entries(&mut self) -> impl Stream<Item = std::io::Result<Entry>> + Unpin + '_ {
 		Box::pin(async_stream::try_stream! {
 			self.load_if_needed().await?;
 
-			loop {
-				let current = self.current.as_mut().unwrap();
-				let array_object = ObjectHeader::read_at(&mut self.io, current.position.entry_array_offset.get())
-					.await?
-					.check_type(ObjectType::EntryArray)?;
+			let mut current_seqnum = None;
 
-				let payload_size = array_object.payload_size() - ENTRY_ARRAY_HEADER_SIZE as u64;
-				let array_size = payload_size / current.header.sizeof_entry_array_item();
-				tracing::trace!(?payload_size, ?array_size, "entry array calculations");
+			loop { // files
+				loop { // entry arrays
+					let current = self.current.as_mut().unwrap();
+					let array_object = ObjectHeader::read_at(&mut self.io, current.position.entry_array_offset.get())
+						.await?
+						.check_type(ObjectType::EntryArray)?;
 
-				while let Some((entry_index, array_offset)) = current.entry_index_and_offset() {
-					let entry_offset = if current.header.is_compact() {
-						u64::from(EntryArrayCompactItem::read_at(&mut self.io, array_offset).await?.offset)
-					} else {
-						EntryArrayRegularItem::read_at(&mut self.io, array_offset).await?.offset
-					};
-					tracing::trace!(?entry_offset, "got entry offset");
-					if entry_offset == 0 {
-						tracing::trace!("bumping to next entry array (zero)");
-						// we're at the end of the entry array
-						current.position.index = None;
-						break;
+					let payload_size = array_object.payload_size() - ENTRY_ARRAY_HEADER_SIZE as u64;
+					let array_size = payload_size / current.header.sizeof_entry_array_item();
+					tracing::trace!(?payload_size, ?array_size, "entry array calculations");
+
+					while let Some((entry_index, array_offset)) = current.entry_index_and_offset() {
+						let entry_offset = if current.header.is_compact() {
+							u64::from(EntryArrayCompactItem::read_at(&mut self.io, array_offset).await?.offset)
+						} else {
+							EntryArrayRegularItem::read_at(&mut self.io, array_offset).await?.offset
+						};
+						tracing::trace!(?entry_offset, "got entry offset");
+						if entry_offset == 0 {
+							tracing::trace!("bumping to next entry array (zero)");
+							// we're at the end of the entry array
+							current.position.index = None;
+							break;
+						}
+
+						let entry = Entry::read_at(&mut self.io, entry_offset, &current.header).await?;
+						current_seqnum = Some(entry.header.seqnum);
+						yield entry;
+						if entry_index + 1 < array_size {
+							tracing::trace!(?entry_index, ?array_size, "bumping to next array entry");
+							*(current.position.index.as_mut().unwrap()) += 1;
+							continue;
+						} else {
+							tracing::trace!(?entry_index, ?array_size, "bumping to next entry array (bounds)");
+							// we're at the end of the entry array
+							current.position.index = None;
+							break;
+						}
 					}
 
-					yield Entry::read_at(&mut self.io, entry_offset, &current.header).await?;
-					if entry_index + 1 < array_size {
-						tracing::trace!(?entry_index, ?array_size, "bumping to next array entry");
-						*(current.position.index.as_mut().unwrap()) += 1;
-						continue;
-					} else {
-						tracing::trace!(?entry_index, ?array_size, "bumping to next entry array (bounds)");
-						// we're at the end of the entry array
-						current.position.index = None;
+					// we're at the end of the entry array, either from the above loop, or because index was already None
+					if !self.next_entry_array().await? {
+						// we're at the end, stop looping
 						break;
 					}
 				}
 
-				// we're at the end of the entry array, either from the above loop, or because index was already None
-				if !self.next_entry_array().await? {
-					// we're at the end, stop looping
+				if let Some(seqnum) = current_seqnum {
+					let (selected, prefix) = self.selected_journal()?;
+
+					if let Some(next_file) = self.io.list_files(Some(&prefix)).filter_map(|file| async move { match file {
+						Ok(file @ FilenameInfo::Archived { head_seqnum, .. }) if head_seqnum > seqnum => Some(file)
+						, _ => None
+					} }).collect::<BTreeSet<_>>().await.first() {
+						self.io.open(&T::make_filename(next_file)).await?;
+						self.load().await?;
+						continue;
+					}
+
+					let current_file_is_archived = self.io.current().and_then(|path| T::parse_filename(path)).map_or(false, |file| file.is_archived());
+					if current_file_is_archived {
+						tracing::debug!("moving on to the current/latest file");
+						self.io.open(&T::make_filename(&FilenameInfo::Latest { machine_id: selected.machine_id, scope: selected.scope.clone() })).await?;
+						self.load().await?;
+						continue;
+					}
+
+					tracing::debug!("no next file, we're done");
+					break;
+				} else {
+					// we iterated no entries, so we're probably at the end?
+					tracing::debug!("no more entries probably");
 					break;
 				}
 			}

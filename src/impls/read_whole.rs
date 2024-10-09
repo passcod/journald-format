@@ -29,7 +29,7 @@ impl ReadWholeFile {
 }
 
 impl AsyncFileRead for ReadWholeFile {
-	#[tracing::instrument(level = "trace", skip(self))]
+	#[tracing::instrument(level = "debug", skip(self))]
 	fn open(
 		&mut self,
 		filename: &Path,
@@ -99,7 +99,6 @@ impl AsyncSeek for ReadWholeFile {
 		cx: &mut std::task::Context<'_>,
 		pos: io::SeekFrom,
 	) -> Poll<io::Result<u64>> {
-
 		self.open.as_mut().map_or_else(
 			|| {
 				Poll::Ready(Err(io::Error::new(
@@ -107,9 +106,7 @@ impl AsyncSeek for ReadWholeFile {
 					"no file open",
 				)))
 			},
-			|open| {
-				Pin::new(&mut open.file).poll_seek(cx, pos)
-			},
+			|open| Pin::new(&mut open.file).poll_seek(cx, pos),
 		)
 	}
 }
@@ -127,9 +124,7 @@ impl AsyncRead for ReadWholeFile {
 					"no file open",
 				)))
 			},
-			|open| {
-				Pin::new(&mut open.file).poll_read(cx, buf)
-			},
+			|open| Pin::new(&mut open.file).poll_read(cx, buf),
 		)
 	}
 }

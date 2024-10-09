@@ -182,7 +182,7 @@ fn test_parse_filename_archived() {
 #[test]
 fn test_make_filename_latest() {
 	assert_eq!(
-		JournalOnDisk::make_filename(FilenameInfo::Latest {
+		JournalOnDisk::make_filename(&FilenameInfo::Latest {
 			machine_id: 0xc444c71c038d45b0af201444a83b91c9,
 			scope: "system".into()
 		}),
@@ -196,7 +196,7 @@ fn test_make_filename_archived() {
 	use std::num::{NonZeroU128, NonZeroU64};
 
 	assert_eq!(
-		JournalOnDisk::make_filename(FilenameInfo::Archived {
+		JournalOnDisk::make_filename(&FilenameInfo::Archived {
 			machine_id: 0xc444c71c038d45b0af201444a83b91c9,
 			scope: "system".into(),
 			file_seqnum: NonZeroU128::new(0xae257a224b70405a9042a99aef057ce0).unwrap(),
