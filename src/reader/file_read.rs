@@ -40,6 +40,8 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 	/// overwriting the default [`make_filename`](AsyncFileRead::make_filename) and
 	/// [`parse_filename`](AsyncFileRead::parse_filename) associated functions.
 	///
+	/// Must ignore the `fss` file present when Forward Secure Sealing is enabled.
+	///
 	/// ```plain
 	/// # list_files(None)
 	/// alpha/system@a-b-c.journal
@@ -174,6 +176,9 @@ pub trait AsyncFileRead: AsyncReadExt + AsyncSeekExt + Unpin {
 
 		let Some((scope, rest)) = filename.split_once('@') else {
 			let (scope, _) = filename.split_once('.').unwrap_or((filename, ""));
+			if scope == "fss" {
+				return None;
+			}
 			return Some(FilenameInfo::Latest {
 				machine_id,
 				scope: scope.to_string(),
