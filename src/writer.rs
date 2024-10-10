@@ -6,7 +6,7 @@ mod options;
 
 pub struct JournalWriter<T> {
 	options: CreateOptions,
-	io: T,
+	_io: T,
 	prepared: bool,
 }
 
@@ -27,7 +27,7 @@ where
 	pub fn with_options(io: T, options: CreateOptions) -> Self {
 		Self {
 			options,
-			io,
+			_io: io,
 			prepared: false,
 		}
 	}
