@@ -75,8 +75,8 @@ pub struct ObjectHeader {
 	pub size: u64,
 }
 
-pub const OBJECT_HEADER_SIZE: usize = std::mem::size_of::<ObjectHeader>();
-const _: [(); OBJECT_HEADER_SIZE] = [(); 16];
+pub const OBJECT_HEADER_SIZE: u64 = std::mem::size_of::<ObjectHeader>() as _;
+const _: [(); OBJECT_HEADER_SIZE as _] = [(); 16];
 
 impl SimpleRead for ObjectHeader {}
 

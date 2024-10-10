@@ -11,8 +11,8 @@ pub struct EntryArrayObjectHeader {
 	pub next_entry_array_offset: Option<NonZeroU64>,
 }
 
-pub const ENTRY_ARRAY_HEADER_SIZE: usize = std::mem::size_of::<EntryArrayObjectHeader>();
-const _: [(); ENTRY_ARRAY_HEADER_SIZE] = [(); 8];
+pub const ENTRY_ARRAY_HEADER_SIZE: u64 = std::mem::size_of::<EntryArrayObjectHeader>() as _;
+const _: [(); ENTRY_ARRAY_HEADER_SIZE as _] = [(); 8];
 
 impl SimpleRead for EntryArrayObjectHeader {}
 

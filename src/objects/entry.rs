@@ -16,8 +16,7 @@ pub struct EntryObjectHeader {
 	pub xor_hash: u64,
 }
 
-pub const ENTRY_OBJECT_HEADER_SIZE: usize = std::mem::size_of::<EntryObjectHeader>();
-const _: [(); ENTRY_OBJECT_HEADER_SIZE] = [(); 48];
+pub const ENTRY_OBJECT_HEADER_SIZE: u64 = 48;
 
 impl SimpleRead for EntryObjectHeader {}
 
