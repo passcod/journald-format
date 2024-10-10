@@ -6,3 +6,5 @@ pub mod reader;
 pub mod writer;
 
 pub mod impls;
+
+pub(crate) mod deku_helpers;

@@ -114,8 +114,8 @@ pub struct Header {
 	///
 	/// None if the journal is empty.
 	#[deku(
-		reader = "realtime_deku_reader(deku::reader)",
-		writer = "realtime_deku_writer(deku::writer, &self.head_entry_realtime)"
+		reader = "crate::deku_helpers::reader_realtime_opt(deku::reader)",
+		writer = "crate::deku_helpers::writer_realtime_opt(deku::writer, &self.head_entry_realtime)"
 	)]
 	pub head_entry_realtime: Option<Timestamp>, // 8 = 192
 
@@ -123,8 +123,8 @@ pub struct Header {
 	///
 	/// None if the journal is empty.
 	#[deku(
-		reader = "realtime_deku_reader(deku::reader)",
-		writer = "realtime_deku_writer(deku::writer, &self.head_entry_realtime)"
+		reader = "crate::deku_helpers::reader_realtime_opt(deku::reader)",
+		writer = "crate::deku_helpers::writer_realtime_opt(deku::writer, &self.head_entry_realtime)"
 	)]
 	pub tail_entry_realtime: Option<Timestamp>, // 8 = 200
 
@@ -476,26 +476,6 @@ impl IncompatibleFlag {
 	) -> Result<(), DekuError> {
 		field.bits().to_writer(writer, Endian::Little)
 	}
-}
-
-fn realtime_deku_reader<R: no_std_io::Read + no_std_io::Seek>(
-	reader: &mut Reader<R>,
-) -> Result<Option<Timestamp>, DekuError> {
-	let value = u64::from_reader_with_ctx(reader, Endian::Little)?;
-	Timestamp::from_microsecond(value.try_into()?)
-		.map_err(|err| DekuError::Assertion(format!("Invalid timestamp: {err}").into()))
-		.map(Some)
-}
-
-fn realtime_deku_writer<W: std::io::Write + std::io::Seek>(
-	writer: &mut Writer<W>,
-	field: &Option<Timestamp>,
-) -> Result<(), DekuError> {
-	let value: u64 = field
-		.map(|ts| ts.as_microsecond())
-		.unwrap_or_default()
-		.try_into()?;
-	value.to_writer(writer, Endian::Little)
 }
 
 #[derive(Debug, PartialEq, Eq, DekuRead, DekuWrite)]

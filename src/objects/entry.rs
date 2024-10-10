@@ -1,6 +1,7 @@
 use std::num::{NonZeroU32, NonZeroU64};
 
 use deku::prelude::*;
+use jiff::Timestamp;
 
 use crate::{header::Header, reader::AsyncFileRead};
 
@@ -10,7 +11,13 @@ use super::{ObjectHeader, ObjectType, SimpleRead, OBJECT_HEADER_SIZE};
 #[deku(endian = "little")]
 pub struct EntryObjectHeader {
 	pub seqnum: NonZeroU64,
-	pub realtime: u64,
+
+	#[deku(
+		reader = "crate::deku_helpers::reader_realtime(deku::reader)",
+		writer = "crate::deku_helpers::writer_realtime(deku::writer, &self.realtime)"
+	)]
+	pub realtime: Timestamp,
+
 	pub monotonic: u64,
 	pub boot_id: u128,
 	pub xor_hash: u64,
@@ -61,12 +68,12 @@ impl Entry {
 		tracing::trace!(?object, "read object header");
 
 		tracing::trace!(?offset, "reading entry header");
-		let header_offset = offset + OBJECT_HEADER_SIZE as u64;
+		let header_offset = offset + OBJECT_HEADER_SIZE;
 		let header = EntryObjectHeader::read_at(io, header_offset).await?;
 		tracing::trace!(?header, "read entry header");
 
-		let array_offset = header_offset + ENTRY_OBJECT_HEADER_SIZE as u64;
-		let array_size = object.payload_size() - ENTRY_OBJECT_HEADER_SIZE as u64;
+		let array_offset = header_offset + ENTRY_OBJECT_HEADER_SIZE;
+		let array_size = object.payload_size() - ENTRY_OBJECT_HEADER_SIZE;
 
 		let size = file_header.sizeof_entry_object_item();
 		let capacity = array_size / size;
