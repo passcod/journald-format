@@ -1,9 +1,9 @@
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::{NonZeroU128, NonZeroU32, NonZeroU64};
 
 use deku::prelude::*;
 use jiff::Timestamp;
 
-use crate::{header::Header, reader::AsyncFileRead};
+use crate::{header::Header, monotonic::Monotonic, reader::AsyncFileRead};
 
 use super::{ObjectHeader, ObjectType, SimpleRead, OBJECT_HEADER_SIZE};
 
@@ -18,8 +18,8 @@ pub struct EntryObjectHeader {
 	)]
 	pub realtime: Timestamp,
 
-	pub monotonic: u64,
-	pub boot_id: u128,
+	pub monotonic: Monotonic,
+	pub boot_id: NonZeroU128,
 	pub xor_hash: u64,
 }
 

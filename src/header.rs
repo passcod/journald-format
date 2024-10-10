@@ -5,12 +5,10 @@ use flagset::{flags, FlagSet};
 use jiff::Timestamp;
 
 use crate::{
-	objects::{
+	monotonic::Monotonic, objects::{
 		EntryArrayCompactItem, EntryArrayRegularItem, EntryObjectCompactItem,
 		EntryObjectRegularItem,
-	},
-	reader::{AsyncFileRead, FilenameInfo},
-	tables::HashTable,
+	}, reader::{AsyncFileRead, FilenameInfo}, tables::HashTable
 };
 
 // magic 8 = 8
@@ -133,7 +131,7 @@ pub struct Header {
 	/// None if the journal is empty.
 	///
 	/// If [`CompatibleFlag::TailEntryBootId`] is not set, this field cannot be trusted and should be ignored.
-	pub tail_entry_monotonic: Option<NonZeroU64>, // 8 = 208
+	pub tail_entry_monotonic: Option<Monotonic>, // 8 = 208
 
 	/// The number of data objects in the journal file.
 	///
@@ -374,7 +372,7 @@ async fn test_header_parse() {
 			entry_array_offset: NonZeroU64::new(3738008).unwrap(),
 			head_entry_realtime: "2024-10-01T10:45:31.788676Z".parse().ok(),
 			tail_entry_realtime: "2024-10-03T12:56:24.258339Z".parse().ok(),
-			tail_entry_monotonic: NonZeroU64::new(370782072822),
+			tail_entry_monotonic: Monotonic::new(370782072822),
 			n_data: Some(102052),
 			n_fields: Some(108),
 			n_tags: Some(0),
