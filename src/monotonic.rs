@@ -23,4 +23,9 @@ impl Monotonic {
 	pub fn to_timestamp(self, epoch: Timestamp) -> Timestamp {
 		epoch.saturating_add(Duration::from_micros(self.0.get()))
 	}
+
+	/// Derive epoch from an equivalent realtime timestamp.
+	pub fn estimate_epoch(self, equivalent_timestamp: Timestamp) -> Timestamp {
+		equivalent_timestamp.saturating_sub(Duration::from_micros(self.0.get()))
+	}
 }
