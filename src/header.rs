@@ -5,10 +5,13 @@ use flagset::{flags, FlagSet};
 use jiff::Timestamp;
 
 use crate::{
-	monotonic::Monotonic, objects::{
+	monotonic::Monotonic,
+	objects::{
 		EntryArrayCompactItem, EntryArrayRegularItem, EntryObjectCompactItem,
 		EntryObjectRegularItem,
-	}, reader::{AsyncFileRead, FilenameInfo}, tables::HashTable
+	},
+	reader::{AsyncFileRead, FilenameInfo},
+	tables::HashTable,
 };
 
 // magic 8 = 8

@@ -1,11 +1,12 @@
 use std::num::{NonZeroU128, NonZeroU32, NonZeroU64};
 
 use deku::prelude::*;
+use futures_util::Stream;
 use jiff::Timestamp;
 
 use crate::{header::Header, monotonic::Monotonic, reader::AsyncFileRead};
 
-use super::{ObjectHeader, ObjectType, SimpleRead, OBJECT_HEADER_SIZE};
+use super::{Data, ObjectHeader, ObjectType, SimpleRead, OBJECT_HEADER_SIZE};
 
 #[derive(Debug, Clone, PartialEq, Eq, DekuRead, DekuWrite)]
 #[deku(endian = "little")]
@@ -111,6 +112,23 @@ impl Entry {
 			offset: NonZeroU64::new(offset).unwrap(),
 			header,
 			objects,
+		})
+	}
+
+	#[tracing::instrument(level = "trace", skip(self, io, file_header))]
+	pub(crate) fn data<'io, R: AsyncFileRead + Unpin>(
+		&'io self,
+		io: &'io mut R,
+		file_header: &'io Header,
+	) -> impl Stream<Item = std::io::Result<Data>> + Unpin + 'io
+	where
+		Self: Sized,
+	{
+		Box::pin(async_stream::try_stream! {
+			let is_compact = file_header.is_compact();
+			for offset in &self.objects {
+				yield Data::read_at(io, offset.get().into(), is_compact).await?;
+			}
 		})
 	}
 }

@@ -13,8 +13,7 @@ pub fn writer_realtime<W: std::io::Write + std::io::Seek>(
 	writer: &mut Writer<W>,
 	field: &Timestamp,
 ) -> Result<(), DekuError> {
-	let value: u64 = field.as_microsecond()
-		.try_into()?;
+	let value: u64 = field.as_microsecond().try_into()?;
 	value.to_writer(writer, Endian::Little)
 }
 

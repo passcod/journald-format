@@ -10,8 +10,8 @@ use futures_util::{Stream, StreamExt as _};
 use crate::{
 	header::Header,
 	objects::{
-		Entry, EntryArrayCompactItem, EntryArrayObjectHeader, EntryArrayRegularItem, ObjectHeader,
-		ObjectType, SimpleRead, ENTRY_ARRAY_HEADER_SIZE, OBJECT_HEADER_SIZE,
+		Data, Entry, EntryArrayCompactItem, EntryArrayObjectHeader, EntryArrayRegularItem,
+		ObjectHeader, ObjectType, SimpleRead, ENTRY_ARRAY_HEADER_SIZE, OBJECT_HEADER_SIZE,
 	},
 };
 
@@ -280,6 +280,21 @@ where
 				}
 			}
 		})
+	}
+
+	/// Read the data of an entry.
+	///
+	/// Panics if a file isn't loaded.
+	#[tracing::instrument(level = "trace", skip(self))]
+	pub fn entry_data<'e>(
+		&'e mut self,
+		entry: &'e Entry,
+	) -> impl Stream<Item = std::io::Result<Data>> + Unpin + '_ {
+		let CurrentFile { header, .. } = self
+			.current
+			.as_ref()
+			.expect("tried to read entry without a loaded file");
+		entry.data(&mut self.io, header)
 	}
 
 	/// Verify all data in all available journals.

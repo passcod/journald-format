@@ -28,15 +28,23 @@ async fn main() -> std::io::Result<()> {
 	reader.select(system).await?;
 	reader.seek(Seek::Oldest).await?;
 
-	let mut entries = reader.entries();
-	let mut total = 0;
 	let mut last = None;
-	while let Some(entry) = entries.next().await {
-		let entry = entry?;
-		total += entry.objects.len();
-		last = Some(entry);
+	let mut total = 0;
+	{
+		let mut entries = reader.entries().take(100001);
+		while let Some(entry) = entries.next().await {
+			let entry = entry?;
+			total += entry.objects.len();
+			last = Some(entry);
+		}
 	}
 
-	dbg!(total, last);
+	let entry = dbg!(last).unwrap().clone();
+	let mut data = reader.entry_data(&entry);
+	while let Some(datum) = data.next().await {
+		dbg!(datum?);
+	}
+
+	dbg!(total);
 	Ok(())
 }
